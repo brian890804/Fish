@@ -101,6 +101,24 @@ export function tideFromEvents(t: number, events: TideEvent[]): TideState | null
 }
 
 const DIRS = ["北", "東北", "東", "東南", "南", "西南", "西", "西北"];
+const DIRS16 = ["北", "北北東", "東北", "東北東", "東", "東南東", "東南", "南南東", "南", "南南西", "西南", "西南西", "西", "西北西", "西北", "北北西"];
+
+/** 16 方位（畫面顯示用，每個方位 22.5°）。分析分組仍用 8 方位，避免每組樣本太少 */
+export function dirName16(deg: number | null | undefined): string {
+  if (deg == null) return "-";
+  return DIRS16[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
+}
+
+/** 角度的平均（風向不能直接算數平均，350° 和 10° 平均要是 0° 不是 180°） */
+export function meanDirection(degs: (number | null | undefined)[]): number | null {
+  const v = degs.filter((d): d is number => d != null);
+  if (v.length === 0) return null;
+  const x = v.reduce((a, d) => a + Math.cos((d * Math.PI) / 180), 0);
+  const y = v.reduce((a, d) => a + Math.sin((d * Math.PI) / 180), 0);
+  return Math.round(((Math.atan2(y, x) * 180) / Math.PI + 360) % 360);
+}
+
+/** 8 方位（分析分組用） */
 export function dirName(deg: number | null | undefined): string {
   if (deg == null) return "-";
   return DIRS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];

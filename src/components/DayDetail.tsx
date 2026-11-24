@@ -7,7 +7,7 @@ import { useSWRConfig } from "swr";
 import { del, photoUrl, useApi } from "../lib/api";
 import type { Catch, DayDetail, Trip, WeatherHour } from "../lib/types";
 import { hm, kn, fmt1 } from "../lib/format";
-import { TIDE_LABEL, dirName, hourFloor, moonAt, tideFromEvents, tideState, type TideEvent } from "../../shared/conditions";
+import { TIDE_LABEL, dirName16, meanDirection, hourFloor, moonAt, tideFromEvents, tideState, type TideEvent } from "../../shared/conditions";
 import { SpeciesIcon, SPECIES_LABEL } from "./icons";
 import CatchCount from "./CatchCount";
 import TripDialog from "./TripDialog";
@@ -48,8 +48,10 @@ function TripConditions({ trip }: { trip: Trip }) {
   }
   const tides = tideSeq;
   const moon = moonAt((trip.start_at + trip.end_at) / 2);
+  const windDir = meanDirection(inTrip.map((w) => w.wind_dir));
   const items = [
-    { label: "風", value: `${dirName(mid.wind_dir)} ${kn(avg(inTrip.map((w) => w.wind_ms)))}kn`, extra: <Arrow deg={mid.wind_dir} size={14} /> },
+    // 風向取出釣期間的平均方向（用向量平均），附上角度
+    { label: "風", value: `${dirName16(windDir)} ${windDir ?? "-"}° · ${kn(avg(inTrip.map((w) => w.wind_ms)))}kn`, extra: <Arrow deg={windDir} size={14} /> },
     { label: "浪", value: `${fmt1(avg(inTrip.map((w) => w.wave_m)))}m · ${fmt1(mid.wave_period_s)}s` },
     { label: "潮", value: tides.join("→") || "-" },
     { label: "月", value: `${moon.emoji} ${Math.round(moon.illumination * 100)}%` },
@@ -86,7 +88,7 @@ function CatchRow({ c, trip, onClick }: { c: Catch; trip: Trip; onClick: () => v
         </Typography>
         {w && (
           <Typography variant="caption" color="text.secondary">
-            浪 {fmt1(w.wave_m)}m · 風 {dirName(w.wind_dir)} {kn(w.wind_ms)}kn{w.tide ? ` · ${TIDE_LABEL[w.tide]}` : ""}
+            浪 {fmt1(w.wave_m)}m · 風 {dirName16(w.wind_dir)} {w.wind_dir == null ? "" : `${Math.round(w.wind_dir)}° `}{kn(w.wind_ms)}kn{w.tide ? ` · ${TIDE_LABEL[w.tide]}` : ""}
           </Typography>
         )}
         {c.note && <Typography variant="body2" color="text.secondary" noWrap>{c.note}</Typography>}

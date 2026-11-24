@@ -2,7 +2,7 @@ import { Box, Typography } from "@mui/material";
 import dayjs from "dayjs";
 import type { ForecastHour } from "../lib/types";
 import { kn, scoreColor, windColor, waveColor, weekday } from "../lib/format";
-import { dirName } from "../../shared/conditions";
+import { dirName16 } from "../../shared/conditions";
 import Arrow from "./Arrow";
 
 /** 未來 7 天每天一張小卡：最佳評分、風、浪、月亮 */
@@ -44,7 +44,7 @@ export default function DailyOutlook({ hours }: { hours: ForecastHour[] }) {
             <Typography variant="caption" color="text.secondary">{best ? `最佳 ${dayjs.unix(best.time).format("HH:mm")}` : "尚無評分"}</Typography>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 1, borderRadius: 1, bgcolor: windColor(maxWind), color: "#0b1520" }}>
               <Arrow deg={mid?.wind_dir ?? null} size={14} />
-              <Typography sx={{ fontWeight: 800, fontSize: 13 }}>{dirName(mid?.wind_dir)} ≤{maxWind}kn</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: 13 }}>{dirName16(mid?.wind_dir)} ≤{maxWind}kn</Typography>
             </Box>
             <Box sx={{ px: 1, borderRadius: 1, bgcolor: waveColor(maxWave), color: "#0b1520" }}>
               <Typography sx={{ fontWeight: 800, fontSize: 13 }}>

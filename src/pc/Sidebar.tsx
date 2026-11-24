@@ -1,4 +1,4 @@
-import { Box, Button, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from "@mui/material";
+import { Box, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from "@mui/material";
 import DashboardIcon from "@mui/icons-material/SpaceDashboardRounded";
 import CalendarIcon from "@mui/icons-material/CalendarMonthRounded";
 import InsightsIcon from "@mui/icons-material/InsightsRounded";

@@ -4,7 +4,7 @@ import type { Analysis, ForecastHour } from "../lib/types";
 import { kn, scoreColor } from "../lib/format";
 import { useApi } from "../lib/api";
 import { ADVICE, statusColor, type Status } from "../lib/advice";
-import { TIDE_LABEL, dirName } from "../../shared/conditions";
+import { TIDE_LABEL, dirName16 } from "../../shared/conditions";
 import { STATUS, SURFACE, TEXT } from "../theme";
 import Gauge, { gaugeStatus } from "./Gauge";
 import Arrow from "./Arrow";
@@ -107,7 +107,7 @@ export default function ConditionsGrid({ now, best = [], historyHours = 0, secon
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 1 }}>
         <Gauge
           size={primarySize} color={C.wind} value={windKn} min={0} max={35} unit="kn" advice={ADVICE.wind} best={b(ADVICE.wind)}
-          label={<Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>風 {dirName(now.wind_dir)}<Arrow deg={now.wind_dir} size={13} /></Box>}
+          label={<Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>風 {dirName16(now.wind_dir)}<Arrow deg={now.wind_dir} size={13} /></Box>}
         />
         <Gauge size={primarySize} color={C.gust} value={gustKn} min={0} max={40} unit="kn" label="陣風" advice={ADVICE.gust} />
         <Gauge
