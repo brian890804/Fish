@@ -238,6 +238,15 @@ export async function fetchOpenMeteo(spot: Spot, range: OmRange): Promise<Map<nu
 const COLS = ["spot_id", "time", "source", ...FIELDS, "updated_at"];
 
 /**
+ * 寫入前的修正：GFS（溫古魯與 Open-Meteo 都一樣）有時給出比平均風速還小的陣風，
+ * 物理上不合理，這時把陣風拉到跟平均風速一樣。
+ */
+export function normalize(r: WeatherRow): WeatherRow {
+  if (r.gust_ms != null && r.wind_ms != null && r.gust_ms < r.wind_ms) return { ...r, gust_ms: r.wind_ms };
+  return r;
+}
+
+/**
  * mode = "refresh"：已經過去的小時不再更新，只覆蓋現在與未來的預報；沒有的小時就新增。
  * mode = "fill"：只補沒有的小時（補抓過去資料用）。
  */
@@ -254,7 +263,7 @@ async function writeRows(db: D1Database, spotId: number, rows: WeatherRow[], mod
   const sql = `INSERT INTO weather_hourly (${COLS.join(",")}) VALUES (${placeholders})
                ON CONFLICT(spot_id, time) ${conflict}`;
   const stmt = db.prepare(sql);
-  const batch = rows.map((r) =>
+  const batch = rows.map(normalize).map((r) =>
     stmt.bind(spotId, r.time, r.source, ...FIELDS.map((f) => r[f]), now),
   );
   // D1 一次 batch 不要太大
