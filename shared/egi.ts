@@ -4,6 +4,7 @@ export const EGI_COLORS = [
   { key: "blue", label: "藍", hex: "#3b82f6" },
   { key: "green", label: "綠", hex: "#22c55e" },
   { key: "purple", label: "紫", hex: "#a855f7" },
+  { key: "pink", label: "粉紅", hex: "#f472b6" },
   { key: "gray", label: "灰", hex: "#9ca3af" },
   { key: "yellow", label: "黃", hex: "#facc15" },
   { key: "brown", label: "褐", hex: "#a16207" },
