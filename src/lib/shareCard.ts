@@ -208,19 +208,32 @@ export async function drawShareCard(c: CardInput): Promise<HTMLCanvasElement> {
   return canvas;
 }
 
-/** 分享：支援的手機直接叫出分享選單，否則下載圖片 */
-export async function shareCard(c: CardInput) {
+/** 畫出圖卡的 PNG（先給使用者預覽，再決定分享或下載） */
+export async function renderCard(c: CardInput): Promise<Blob> {
   const canvas = await drawShareCard(c);
-  const blob: Blob = await new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("產生圖卡失敗"))), "image/png"));
-  const file = new File([blob], `釣況-${c.date}.png`, { type: "image/png" });
-  if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file], title: `釣況 ${c.date}` });
-    return;
-  }
+  return new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("產生圖卡失敗"))), "image/png"));
+}
+
+const fileName = (date: string) => `釣況-${date}.png`;
+
+/** 手機支援直接分享檔案時為 true（桌機通常是 false，只能下載） */
+export function canShareImage(blob: Blob, date: string): boolean {
+  const file = new File([blob], fileName(date), { type: "image/png" });
+  return typeof navigator.canShare === "function" && navigator.canShare({ files: [file] });
+}
+
+/** 叫出系統分享選單（只在支援分享檔案時使用） */
+export async function shareImage(blob: Blob, date: string) {
+  const file = new File([blob], fileName(date), { type: "image/png" });
+  await navigator.share({ files: [file], title: `釣況 ${date}` });
+}
+
+/** 下載 PNG */
+export function downloadImage(blob: Blob, date: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = file.name;
+  a.download = fileName(date);
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }

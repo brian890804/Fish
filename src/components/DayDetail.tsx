@@ -21,7 +21,8 @@ import { EgiDot } from "./EgiColorPicker";
 import TideCurve from "./TideCurve";
 import LazyImage from "./LazyImage";
 import SunMoonRow from "./SunMoonRow";
-import { shareCard } from "../lib/shareCard";
+import { renderCard } from "../lib/shareCard";
+import SharePreview, { type CardPreview } from "./SharePreview";
 import { waterLabel } from "../../shared/water";
 import { TEXT } from "../theme";
 import PlaceIcon from "@mui/icons-material/PlaceRounded";
@@ -157,10 +158,11 @@ export default function DayDetail({ date }: { date: string | null }) {
   const [catchDialog, setCatchDialog] = useState<{ open: boolean; trip: Trip | null; item?: Catch | null }>({ open: false, trip: null });
   const [confirmDialog, confirm] = useConfirm();
   const [viewing, setViewing] = useState<string[] | null>(null);
+  const [preview, setPreview] = useState<CardPreview | null>(null);
   const spots = useSpots();
 
   // 分享圖卡：把這一天所有出釣合成一張
-  const shareDay = () => {
+  const shareDay = async () => {
     const all = trips ?? [];
     if (!all.length || !date) return;
     const cs = all.flatMap((t) => t.catches);
@@ -178,17 +180,23 @@ export default function DayDetail({ date }: { date: string | null }) {
       .sort((a, b) => (b.length_cm ?? -1) - (a.length_cm ?? -1))
       .slice(0, 3)
       .map((c) => ({ url: photoUrl((c.photo_keys?.length ? c.photo_keys[0] : c.photo_key)!), cm: c.length_cm }));
-    shareCard({
-      date,
-      spotName: all[0].spot_name,
-      startAt,
-      endAt,
-      squid: cs.filter((c) => c.species === "squid").length,
-      fish: cs.filter((c) => c.species === "fish").length,
-      maxSquidCm: lens.length ? Math.max(...lens) : null,
-      tideLine,
-      photos,
-    }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+    try {
+      const blob = await renderCard({
+        date,
+        spotName: all[0].spot_name,
+        startAt,
+        endAt,
+        squid: cs.filter((c) => c.species === "squid").length,
+        fish: cs.filter((c) => c.species === "fish").length,
+        maxSquidCm: lens.length ? Math.max(...lens) : null,
+        tideLine,
+        photos,
+      });
+      // 先開預覽，讓使用者看過再決定分享或下載
+      setPreview({ blob, url: URL.createObjectURL(blob), date });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const refresh = () => {
@@ -290,6 +298,13 @@ export default function DayDetail({ date }: { date: string | null }) {
       <CatchDialog open={catchDialog.open} trip={catchDialog.trip} item={catchDialog.item} onClose={() => setCatchDialog({ open: false, trip: null })} onSaved={refresh} />
       {confirmDialog}
       <PhotoViewer keys={viewing} onClose={() => setViewing(null)} />
+      <SharePreview
+        card={preview}
+        onClose={() => {
+          if (preview) URL.revokeObjectURL(preview.url);
+          setPreview(null);
+        }}
+      />
     </>
   );
 }
