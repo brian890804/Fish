@@ -15,7 +15,7 @@ export default function DesktopApp({ tab, onTabChange }: { tab: AppTab; onTabCha
     <Box
       sx={{
         display: "flex", minHeight: "100vh",
-        background: "radial-gradient(1200px 600px at 85% -10%, rgba(79,195,247,0.10), transparent 60%), radial-gradient(900px 500px at -10% 110%, rgba(255,183,77,0.06), transparent 60%)",
+        background: "radial-gradient(1000px 500px at 90% -10%, rgba(92,200,255,0.07), transparent 60%)",
       }}
     >
       <Sidebar tab={tab} onChange={onTabChange} />

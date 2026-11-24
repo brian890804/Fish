@@ -1,3 +1,5 @@
+import { STATUS } from "../theme";
+
 // 現在條件每一格的說明與建議區間。
 // 建議區間是岸邊路亞（餌木）釣軟絲的一般經驗值，不是從使用者資料算出來的；
 // 「你的紀錄」那段則來自 /analysis 的實際統計。
@@ -78,10 +80,9 @@ export const ADVICE: Record<string, Advice> = {
   },
 };
 
-export const STATUS_COLOR: Record<Exclude<Status, "good" | "info">, string> = {
-  warn: "#ffca28",
-  bad: "#ff5252",
-};
+export function statusColor(s: Status): string {
+  return s === "warn" ? STATUS.warn : s === "bad" ? STATUS.bad : s === "good" ? STATUS.good : "transparent";
+}
 
 export const STATUS_LABEL: Record<Status, string> = {
   good: "適合",

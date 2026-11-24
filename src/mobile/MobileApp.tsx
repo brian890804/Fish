@@ -21,7 +21,13 @@ export default function MobileApp({ tab, onTabChange }: { tab: AppTab; onTabChan
         {tab === "analysis" && <AnalysisPage />}
         {tab === "settings" && <SettingsPage />}
       </Box>
-      <Paper elevation={8} sx={{ position: "fixed", left: 0, right: 0, bottom: 0, pb: "env(safe-area-inset-bottom)", zIndex: 10, borderRadius: 0 }}>
+      <Paper
+        elevation={0}
+        sx={{
+          position: "fixed", left: 0, right: 0, bottom: 0, pb: "env(safe-area-inset-bottom)", zIndex: 10, borderRadius: 0,
+          bgcolor: "rgba(10,15,22,0.82)", backdropFilter: "saturate(160%) blur(16px)", borderTop: "1px solid", borderColor: "divider",
+        }}
+      >
         <BottomNavigation showLabels value={tab} onChange={(_, v) => onTabChange(v)} sx={{ maxWidth: 640, mx: "auto", bgcolor: "transparent" }}>
           <BottomNavigationAction value="home" label="今天" icon={<TodayIcon />} />
           <BottomNavigationAction value="calendar" label="行事曆" icon={<CalendarIcon />} />

@@ -1,14 +1,13 @@
 import { useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Chip, Skeleton, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Skeleton, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/AddRounded";
 import OpenIcon from "@mui/icons-material/OpenInNewRounded";
 import ChevronIcon from "@mui/icons-material/ChevronRightRounded";
 import dayjs from "dayjs";
 import { useToday } from "../hooks/useToday";
 import { useCalendar } from "../hooks/useCalendar";
-import { hm, scoreColor, scoreLabel } from "../lib/format";
+import { hm } from "../lib/format";
 import { cardTitleSx } from "../lib/sx";
-import ScoreRing from "../components/ScoreRing";
 import ConditionsGrid from "../components/ConditionsGrid";
 import CatchCount from "../components/CatchCount";
 import ForecastTable from "../components/ForecastTable";
@@ -46,33 +45,13 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 2.5 }}>
         {/* 現在條件 */}
         <Card sx={{ gridColumn: { md: "span 12", lg: "span 8" } }}>
-          <CardContent sx={{ display: "flex", gap: 3, alignItems: "stretch", p: 3 }}>
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, minWidth: 170 }}>
-              <Typography variant="overline" color="text.secondary">現在條件</Typography>
-              <ScoreRing score={t.now?.score} size={130} />
-              <Typography sx={{ fontWeight: 800, fontSize: 18, color: scoreColor(t.now?.score ?? null) }}>{scoreLabel(t.now?.score ?? null)}</Typography>
-              {t.fc.data && t.fc.data.historyHours < 5 && (
-                <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", maxWidth: 170 }}>
-                  累積 5 小時以上的出釣紀錄後才會開始評分
-                </Typography>
-              )}
-            </Box>
-            <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.5 }}>
-              <ConditionsGrid now={t.now} columns={3} size={84} />
-              {t.best.length > 0 && (
-                <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-                  <Typography variant="body2" color="text.secondary">今天較好的時段</Typography>
-                  {t.best.map((h) => (
-                    <Chip key={h.time} label={`${dayjs.unix(h.time).format("HH:mm")} · ${h.score}`} sx={{ bgcolor: scoreColor(h.score), color: "#0b1520", fontWeight: 700 }} />
-                  ))}
-                </Box>
-              )}
-            </Box>
+          <CardContent sx={{ p: 3, "&:last-child": { pb: 3 } }}>
+            <ConditionsGrid now={t.now} best={t.best} historyHours={t.fc.data?.historyHours ?? 0} secondaryColumns={6} primarySize={104} secondarySize={64} />
           </CardContent>
         </Card>
 
         {/* 今日釣獲 */}
-        <Card sx={{ gridColumn: { md: "span 6", lg: "span 4" }, background: "linear-gradient(160deg, rgba(79,195,247,0.16), rgba(15,33,51,1) 60%)" }}>
+        <Card sx={{ gridColumn: { md: "span 6", lg: "span 4" }, background: "linear-gradient(160deg, rgba(92,200,255,0.12), #111923 55%)" }}>
           <CardContent sx={{ p: 3, height: "100%", display: "flex", flexDirection: "column" }}>
             <Typography variant="overline" color="text.secondary">今日釣獲</Typography>
             {t.day.isLoading ? (
@@ -185,7 +164,7 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
                 <ToggleButton value={3}>3 小時</ToggleButton>
               </ToggleButtonGroup>
             </Box>
-            {t.fc.data ? <ForecastTable hours={t.fc.data.hours} step={step} cellWidth={42} rowHeight={28} /> : <Skeleton variant="rounded" height={360} />}
+            {t.fc.data ? <ForecastTable hours={t.fc.data.hours} step={step} cellWidth={46} rowHeight={32} /> : <Skeleton variant="rounded" height={360} />}
           </CardContent>
         </Card>
       </Box>
