@@ -44,7 +44,7 @@ export default function TripDialog({ open, date, trip, onClose, onSaved }: Props
     }
   }, [open, trip, date]);
 
-  const defaultSpot = spots.data?.[0]?.id ?? "";
+  const defaultSpot = (spots.data?.find((s) => s.is_default) ?? spots.data?.[0])?.id ?? "";
   const effectiveSpot = spotId === "" ? defaultSpot : spotId;
 
   const save = async () => {

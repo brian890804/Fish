@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Button, Card, CardContent, IconButton, Typography, Chip, Divider, Skeleton } from "@mui/material";
+import { Box, Button, Card, CardContent, IconButton, Typography, Chip, Divider, Skeleton, Alert } from "@mui/material";
 import EditIcon from "@mui/icons-material/EditRounded";
 import DeleteIcon from "@mui/icons-material/DeleteOutlineRounded";
 import AddIcon from "@mui/icons-material/AddRounded";
@@ -13,6 +13,7 @@ import CatchCount from "./CatchCount";
 import TripDialog from "./TripDialog";
 import CatchDialog from "./CatchDialog";
 import Arrow from "./Arrow";
+import { useConfirm } from "./useConfirm";
 
 function conditionsAt(t: number, weather: WeatherHour[]) {
   const h = hourFloor(t);
@@ -88,6 +89,7 @@ export default function DayDetail({ date }: { date: string | null }) {
   const day = useApi<DayDetail>(date ? `/day?date=${date}` : null);
   const [tripDialog, setTripDialog] = useState<{ open: boolean; trip?: Trip | null }>({ open: false });
   const [catchDialog, setCatchDialog] = useState<{ open: boolean; trip: Trip | null; item?: Catch | null }>({ open: false, trip: null });
+  const [confirmDialog, confirm] = useConfirm();
 
   const refresh = () => {
     day.mutate();
@@ -95,16 +97,28 @@ export default function DayDetail({ date }: { date: string | null }) {
   };
 
   const removeTrip = async (t: Trip) => {
-    if (!confirm(`確定刪除 ${hm(t.start_at)} 這次出釣？裡面的釣獲也會一起刪除。`)) return;
-    await del(`/trips/${t.id}`);
+    const ok = await confirm({
+      title: `刪除 ${hm(t.start_at)} 這次出釣？`,
+      message: t.catches.length ? `裡面的 ${t.catches.length} 筆釣獲和照片也會一起刪除，無法復原。` : "刪除後無法復原。",
+    });
+    if (!ok) return;
+    try {
+      await del(`/trips/${t.id}`);
+    } catch (err) {
+      alertError(err);
+    }
     refresh();
   };
+
+  const [error, setError] = useState("");
+  const alertError = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
 
   const trips = day.data?.date === date ? day.data.trips : undefined;
 
   return (
     <>
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
         {!trips ? (
           <Skeleton variant="rounded" height={200} />
         ) : trips.length === 0 ? (
@@ -157,6 +171,7 @@ export default function DayDetail({ date }: { date: string | null }) {
       </Box>
       <TripDialog open={tripDialog.open} date={date ?? ""} trip={tripDialog.trip} onClose={() => setTripDialog({ open: false })} onSaved={refresh} />
       <CatchDialog open={catchDialog.open} trip={catchDialog.trip} item={catchDialog.item} onClose={() => setCatchDialog({ open: false, trip: null })} onSaved={refresh} />
+      {confirmDialog}
     </>
   );
 }

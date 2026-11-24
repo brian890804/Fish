@@ -78,12 +78,18 @@ export interface AnalysisResult {
 
 export async function analyze(
   db: D1Database,
-  opts: { from: string; to: string; spotId: number | null; species: Species },
+  // spotId：只看某個釣點；weatherSpotId：看共用同一個天氣來源的所有釣點（評分用）
+  opts: { from: string; to: string; spotId: number | null; species: Species; weatherSpotId?: number | null },
 ): Promise<AnalysisResult> {
+  // 每趟出釣都帶上它實際使用的天氣來源（附近釣點共用水湳洞漁港的天氣）
+  const base = `SELECT t.*, COALESCE(s.weather_spot_id, s.id) AS wsid FROM trips t JOIN spots s ON s.id = t.spot_id
+                 WHERE t.date BETWEEN ? AND ?`;
   const tripsQ = opts.spotId
-    ? db.prepare("SELECT * FROM trips WHERE date BETWEEN ? AND ? AND spot_id = ?").bind(opts.from, opts.to, opts.spotId)
-    : db.prepare("SELECT * FROM trips WHERE date BETWEEN ? AND ?").bind(opts.from, opts.to);
-  const { results: trips } = await tripsQ.all<{ id: number; spot_id: number; start_at: number; end_at: number }>();
+    ? db.prepare(`${base} AND t.spot_id = ?`).bind(opts.from, opts.to, opts.spotId)
+    : opts.weatherSpotId
+      ? db.prepare(`${base} AND COALESCE(s.weather_spot_id, s.id) = ?`).bind(opts.from, opts.to, opts.weatherSpotId)
+      : db.prepare(base).bind(opts.from, opts.to);
+  const { results: trips } = await tripsQ.all<{ id: number; spot_id: number; wsid: number; start_at: number; end_at: number }>();
 
   const empty: AnalysisResult = {
     ...opts, trips: 0, hours: 0, catches: 0, squid: 0, fish: 0, rate: 0,
@@ -101,7 +107,8 @@ export async function analyze(
   const counted = catches.filter((c) => opts.species === "all" || c.species === opts.species);
   const minT = Math.min(...trips.map((t) => t.start_at)) - 7200;
   const maxT = Math.max(...trips.map((t) => t.end_at)) + 7200;
-  const weather = await weatherMap(db, opts.spotId, minT, maxT);
+  const wsids = [...new Set(trips.map((t) => t.wsid))];
+  const weather = await weatherMap(db, wsids.length === 1 ? wsids[0] : null, minT, maxT);
 
   // 每個條件分組累計：釣了幾小時、釣到幾隻
   const acc = new Map<string, Map<string, { hours: number; catches: number }>>();
@@ -113,7 +120,7 @@ export async function analyze(
   for (const trip of trips) {
     const tripCatches = counted.filter((c) => c.trip_id === trip.id);
     if (tripCatches.length === 0) blankTrips++;
-    const byTime = weather.get(trip.spot_id) ?? new Map();
+    const byTime = weather.get(trip.wsid) ?? new Map();
     for (let h = hourFloor(trip.start_at); h < trip.end_at; h += 3600) {
       // 這個小時實際有釣的比例（例如 18:30 開始，18 點那格只算 0.5 小時）
       const fished = (Math.min(trip.end_at, h + 3600) - Math.max(trip.start_at, h)) / 3600;

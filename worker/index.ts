@@ -28,9 +28,14 @@ async function body<T>(req: Request): Promise<T> {
 async function getSpot(env: Env, id?: number | null): Promise<Spot> {
   const spot = id
     ? await env.DB.prepare("SELECT * FROM spots WHERE id = ?").bind(id).first<Spot>()
-    : await env.DB.prepare("SELECT * FROM spots ORDER BY is_default DESC, id LIMIT 1").first<Spot>();
+    : await env.DB.prepare("SELECT * FROM spots ORDER BY is_default DESC, sort_order, id LIMIT 1").first<Spot>();
   if (!spot) throw new HttpError(404, "找不到釣點");
   return spot;
+}
+
+/** 這個釣點實際使用的天氣來源（附近釣點共用水湳洞漁港的天氣） */
+async function weatherSpotOf(env: Env, spot: Spot): Promise<Spot> {
+  return spot.weather_spot_id ? getSpot(env, spot.weather_spot_id) : spot;
 }
 
 interface TripInput {
@@ -73,7 +78,8 @@ async function stretchTrip(env: Env, tripId: number, t: number) {
 /** 一天的出釣、釣獲、以及每筆釣獲當下的天氣 */
 async function dayDetail(env: Env, date: string) {
   const { results: trips } = await env.DB.prepare(
-    "SELECT t.*, s.name AS spot_name FROM trips t JOIN spots s ON s.id = t.spot_id WHERE date = ? ORDER BY start_at",
+    `SELECT t.*, s.name AS spot_name, COALESCE(s.weather_spot_id, s.id) AS weather_spot_id
+       FROM trips t JOIN spots s ON s.id = t.spot_id WHERE date = ? ORDER BY start_at`,
   ).bind(date).all<any>();
   if (trips.length === 0) return { date, trips: [] };
   const ids = trips.map((t) => t.id);
@@ -90,7 +96,7 @@ async function dayDetail(env: Env, date: string) {
     trips: trips.map((t) => ({
       ...t,
       catches: catches.filter((c) => c.trip_id === t.id),
-      weather: weather.filter((w) => w.spot_id === t.spot_id && w.time >= hourFloor(t.start_at) - 3600 && w.time <= t.end_at + 3600),
+      weather: weather.filter((w) => w.spot_id === t.weather_spot_id && w.time >= hourFloor(t.start_at) - 3600 && w.time <= t.end_at + 3600),
     })),
   };
 }
@@ -114,24 +120,45 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
 
   // ---- 釣點 ----
   if (path === "/spots" && method === "GET") {
-    const { results } = await env.DB.prepare("SELECT * FROM spots ORDER BY is_default DESC, id").all();
+    const { results } = await env.DB.prepare("SELECT * FROM spots ORDER BY sort_order, id").all();
     return json(results);
   }
   if (path === "/spots" && method === "POST") {
     const s = await body<Partial<Spot>>(req);
-    if (!s.name || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) throw new HttpError(400, "名稱與經緯度必填");
-    const r = await env.DB.prepare("INSERT INTO spots (name, lat, lon, wg_spot_id) VALUES (?, ?, ?, ?) RETURNING *")
-      .bind(s.name, s.lat, s.lon, s.wg_spot_id ?? null).first();
+    if (!s.name?.trim()) throw new HttpError(400, "請填釣點名稱");
+    let { lat, lon } = s;
+    if (s.weather_spot_id) {
+      // 共用天氣的釣點，沒填座標就沿用天氣來源的座標
+      const w = await getSpot(env, s.weather_spot_id);
+      if (w.weather_spot_id) throw new HttpError(400, "天氣來源要選自己抓天氣的釣點");
+      lat = Number.isFinite(lat) ? lat : w.lat;
+      lon = Number.isFinite(lon) ? lon : w.lon;
+    } else if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      throw new HttpError(400, "自己抓天氣的釣點要填經緯度");
+    }
+    const r = await env.DB.prepare(
+      `INSERT INTO spots (name, lat, lon, wg_spot_id, weather_spot_id, sort_order)
+       VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM spots)) RETURNING *`,
+    ).bind(s.name.trim(), lat, lon, s.weather_spot_id ? null : s.wg_spot_id ?? null, s.weather_spot_id ?? null).first();
     return json(r, 201);
   }
   if (seg[0] === "spots" && seg[1] && method === "PUT") {
     const s = await body<Partial<Spot> & { is_default?: number }>(req);
     const id = Number(seg[1]);
+    if (s.weather_spot_id === id) throw new HttpError(400, "天氣來源不能選自己");
+    if (s.weather_spot_id) {
+      const w = await getSpot(env, s.weather_spot_id);
+      if (w.weather_spot_id) throw new HttpError(400, "天氣來源要選自己抓天氣的釣點");
+      const users = await env.DB.prepare("SELECT COUNT(*) AS n FROM spots WHERE weather_spot_id = ?").bind(id).first<{ n: number }>();
+      if (users?.n) throw new HttpError(400, "其他釣點正在使用這裡的天氣，不能改成共用");
+    }
+    // 只更新有傳進來的欄位
+    const cols = ["name", "lat", "lon", "wg_spot_id", "weather_spot_id", "sort_order", "is_default"] as const;
+    const sets = cols.filter((c) => c in s);
+    if (sets.length === 0) throw new HttpError(400, "沒有要更新的欄位");
     if (s.is_default) await env.DB.prepare("UPDATE spots SET is_default = 0").run();
-    const r = await env.DB.prepare(
-      `UPDATE spots SET name = COALESCE(?, name), lat = COALESCE(?, lat), lon = COALESCE(?, lon),
-         wg_spot_id = ?, is_default = COALESCE(?, is_default) WHERE id = ? RETURNING *`,
-    ).bind(s.name ?? null, s.lat ?? null, s.lon ?? null, s.wg_spot_id ?? null, s.is_default ?? null, id).first();
+    const r = await env.DB.prepare(`UPDATE spots SET ${sets.map((c) => `${c} = ?`).join(", ")} WHERE id = ? RETURNING *`)
+      .bind(...sets.map((c) => (s as Record<string, unknown>)[c] ?? null), id).first();
     if (!r) throw new HttpError(404, "找不到釣點");
     return json(r);
   }
@@ -164,7 +191,7 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const r = await env.DB.prepare(
       "INSERT INTO trips (spot_id, date, start_at, end_at, note) VALUES (?, ?, ?, ?, ?) RETURNING *",
     ).bind(spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null).first();
-    await ensureWeather(env.DB, spot, t.start_at, t.end_at).catch((e) => console.error("補抓天氣失敗", e));
+    await ensureWeather(env.DB, await weatherSpotOf(env, spot), t.start_at, t.end_at).catch((e) => console.error("補抓天氣失敗", e));
     return json(r, 201);
   }
   if (seg[0] === "trips" && seg[1] && method === "PUT") {
@@ -175,7 +202,7 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
       "UPDATE trips SET spot_id = ?, date = ?, start_at = ?, end_at = ?, note = ? WHERE id = ? RETURNING *",
     ).bind(spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null, Number(seg[1])).first();
     if (!r) throw new HttpError(404, "找不到出釣紀錄");
-    await ensureWeather(env.DB, spot, t.start_at, t.end_at).catch((e) => console.error("補抓天氣失敗", e));
+    await ensureWeather(env.DB, await weatherSpotOf(env, spot), t.start_at, t.end_at).catch((e) => console.error("補抓天氣失敗", e));
     return json(r);
   }
   if (seg[0] === "trips" && seg[1] && method === "DELETE") {
@@ -240,11 +267,12 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
 
   // ---- 預報與分析 ----
   if (path === "/forecast" && method === "GET") {
-    const spot = await getSpot(env, Number(url.searchParams.get("spot")) || null);
+    const spot = await weatherSpotOf(env, await getSpot(env, Number(url.searchParams.get("spot")) || null));
     const days = Math.min(Number(url.searchParams.get("days") ?? 7), 10);
     const species = (url.searchParams.get("species") ?? "squid") as Species;
     const today = twDate(Date.now() / 1000);
-    const history = await analyze(env.DB, { from: "2000-01-01", to: "2999-12-31", spotId: spot.id, species });
+    // 評分用所有共用這個天氣來源的釣點的紀錄
+    const history = await analyze(env.DB, { from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species });
     const from = twDayStart(today);
     const hours = await forecast(env.DB, spot.id, from, from + days * 86400 - 3600, history);
     const last = await env.DB.prepare(
@@ -268,7 +296,8 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
 }
 
 async function refreshAll(env: Env) {
-  const { results } = await env.DB.prepare("SELECT * FROM spots").all<Spot>();
+  // 只有自己抓天氣的釣點需要更新，共用天氣的釣點直接讀它們的資料
+  const { results } = await env.DB.prepare("SELECT * FROM spots WHERE weather_spot_id IS NULL").all<Spot>();
   const out = [];
   for (const spot of results) {
     try {

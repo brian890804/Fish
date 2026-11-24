@@ -1,23 +1,36 @@
 import { useState } from "react";
-import { Box, Button, Card, CardContent, TextField, Typography, Alert, Chip, Divider } from "@mui/material";
+import {
+  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, MenuItem, TextField, Typography,
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMoreRounded";
 import { post, put } from "../lib/api";
 import { useSpots } from "../hooks/useSpots";
 import type { Spot } from "../lib/types";
 
-function SpotEditor({ spot, onSaved }: { spot?: Spot; onSaved: () => void }) {
+const OWN = "own";
+
+function SpotEditor({ spot, spots, onSaved }: { spot?: Spot; spots: Spot[]; onSaved: () => void }) {
+  // 可以當天氣來源的：自己抓天氣、且不是自己
+  const sources = spots.filter((s) => !s.weather_spot_id && s.id !== spot?.id);
+  const defaultSource = spot ? (spot.weather_spot_id ? String(spot.weather_spot_id) : OWN) : sources[0] ? String(sources[0].id) : OWN;
   const [name, setName] = useState(spot?.name ?? "");
+  const [source, setSource] = useState(defaultSource);
   const [lat, setLat] = useState(spot?.lat?.toString() ?? "");
   const [lon, setLon] = useState(spot?.lon?.toString() ?? "");
   const [wg, setWg] = useState(spot?.wg_spot_id?.toString() ?? "");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const own = source === OWN;
+  const usedByOthers = !!spot && spots.some((s) => s.weather_spot_id === spot.id);
 
   const save = async () => {
-    const payload = { name, lat: Number(lat), lon: Number(lon), wg_spot_id: wg ? Number(wg) : null };
+    const payload = own
+      ? { name, weather_spot_id: null, lat: Number(lat), lon: Number(lon), wg_spot_id: wg ? Number(wg) : null }
+      : { name, weather_spot_id: Number(source) };
     try {
       if (spot) await put(`/spots/${spot.id}`, payload);
       else await post("/spots", payload);
       setMsg({ ok: true, text: "已儲存" });
-      if (!spot) { setName(""); setLat(""); setLon(""); setWg(""); }
+      if (!spot) { setName(""); setLat(""); setLon(""); setWg(""); setSource(defaultSource); }
       onSaved();
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
@@ -27,16 +40,30 @@ function SpotEditor({ spot, onSaved }: { spot?: Spot; onSaved: () => void }) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
       <TextField size="small" label="名稱" value={name} onChange={(e) => setName(e.target.value)} />
-      <Box sx={{ display: "flex", gap: 1 }}>
-        <TextField size="small" label="緯度" value={lat} onChange={(e) => setLat(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
-        <TextField size="small" label="經度" value={lon} onChange={(e) => setLon(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
-      </Box>
-      <TextField size="small" label="溫古魯 spot id" value={wg} onChange={(e) => setWg(e.target.value)} helperText="溫古魯網址最後的數字，例如 windguru.cz/733676" slotProps={{ htmlInput: { inputMode: "numeric" } }} />
+      <TextField
+        select size="small" label="天氣資料" value={source} onChange={(e) => setSource(e.target.value)}
+        disabled={usedByOthers}
+        helperText={usedByOthers ? "其他釣點正在共用這裡的天氣，所以這裡要自己抓" : own ? "自己抓天氣，需要填座標" : "在附近就直接共用，不用另外抓"}
+      >
+        {sources.map((s) => (
+          <MenuItem key={s.id} value={String(s.id)}>使用「{s.name}」的天氣</MenuItem>
+        ))}
+        <MenuItem value={OWN}>自己抓天氣</MenuItem>
+      </TextField>
+      {own && (
+        <>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <TextField size="small" label="緯度" value={lat} onChange={(e) => setLat(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
+            <TextField size="small" label="經度" value={lon} onChange={(e) => setLon(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
+          </Box>
+          <TextField size="small" label="溫古魯 spot id" value={wg} onChange={(e) => setWg(e.target.value)} helperText="溫古魯網址最後的數字，例如 windguru.cz/733676" slotProps={{ htmlInput: { inputMode: "numeric" } }} />
+        </>
+      )}
       {msg && <Alert severity={msg.ok ? "success" : "error"}>{msg.text}</Alert>}
       <Box sx={{ display: "flex", gap: 1 }}>
-        <Button variant="contained" onClick={save} disabled={!name || !lat || !lon}>{spot ? "儲存" : "新增釣點"}</Button>
+        <Button variant="contained" onClick={save} disabled={!name.trim() || (own && (!lat || !lon))}>{spot ? "儲存" : "新增釣點"}</Button>
         {spot && !spot.is_default && (
-          <Button onClick={async () => { await put(`/spots/${spot.id}`, { ...spot, is_default: 1 }); onSaved(); }}>設為預設</Button>
+          <Button onClick={async () => { await put(`/spots/${spot.id}`, { is_default: 1 }); onSaved(); }}>設為預設</Button>
         )}
       </Box>
     </Box>
@@ -62,15 +89,29 @@ export default function SettingsContent() {
       <Card>
         <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <Typography variant="h6">釣點</Typography>
-          {(spots.data ?? []).map((s) => (
-            <Box key={s.id}>
-              {s.is_default ? <Chip size="small" label="預設" color="primary" sx={{ mb: 1 }} /> : null}
-              <SpotEditor spot={s} onSaved={() => spots.mutate()} />
-              <Divider sx={{ mt: 2 }} />
-            </Box>
-          ))}
+          <Box>
+            {(spots.data ?? []).map((s) => {
+              const src = spots.data!.find((x) => x.id === s.weather_spot_id);
+              return (
+                <Accordion key={s.id} disableGutters elevation={0} sx={{ bgcolor: "transparent", "&:before": { display: "none" }, borderBottom: 1, borderColor: "divider" }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                      <Typography sx={{ fontWeight: 700 }}>{s.name}</Typography>
+                      {s.is_default ? <Chip size="small" label="預設" color="primary" /> : null}
+                      <Typography variant="caption" color="text.secondary">
+                        {src ? `天氣：${src.name}` : s.wg_spot_id ? "天氣：自己抓（溫古魯）" : "天氣：自己抓"}
+                      </Typography>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <SpotEditor spot={s} spots={spots.data!} onSaved={() => spots.mutate()} />
+                  </AccordionDetails>
+                </Accordion>
+              );
+            })}
+          </Box>
           <Typography variant="subtitle2" color="text.secondary">新增釣點</Typography>
-          <SpotEditor onSaved={() => spots.mutate()} />
+          {spots.data && <SpotEditor spots={spots.data} onSaved={() => spots.mutate()} />}
         </CardContent>
       </Card>
       <Card>

@@ -8,6 +8,9 @@ export interface Spot {
   lat: number;
   lon: number;
   wg_spot_id: number | null;
+  /** 共用哪個釣點的天氣；NULL 表示自己抓 */
+  weather_spot_id: number | null;
+  sort_order: number;
 }
 
 export interface WeatherRow {

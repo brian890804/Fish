@@ -9,6 +9,7 @@ import dayjs from "dayjs";
 import { del, photoUrl, post, put, uploadPhoto } from "../lib/api";
 import type { Catch, Species, Trip } from "../lib/types";
 import { SpeciesIcon } from "./icons";
+import { useConfirm } from "./useConfirm";
 
 interface Props {
   open: boolean;
@@ -32,6 +33,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [confirmDialog, confirm] = useConfirm();
 
   useEffect(() => {
     if (!open || !trip) return;
@@ -109,13 +111,22 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
   };
 
   const remove = async () => {
-    if (!item || !confirm("確定刪除這筆釣獲？")) return;
-    await del(`/catches/${item.id}`);
-    onSaved();
-    onClose();
+    if (!item || !(await confirm({ title: "刪除這筆釣獲？", message: "刪除後無法復原，照片也會一起刪除。" }))) return;
+    setBusy(true);
+    setError("");
+    try {
+      await del(`/catches/${item.id}`);
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
+    <>
     <Dialog open={open} onClose={onClose} fullWidth>
       <DialogTitle>{item ? "編輯釣獲" : "記錄釣獲"}</DialogTitle>
       <DialogContent>
@@ -165,10 +176,12 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
         </Box>
       </DialogContent>
       <DialogActions>
-        {item && <Button color="error" onClick={remove} sx={{ mr: "auto" }}>刪除</Button>}
+        {item && <Button color="error" onClick={remove} disabled={busy} sx={{ mr: "auto" }}>刪除</Button>}
         <Button onClick={onClose}>取消</Button>
         <Button variant="contained" onClick={save} disabled={busy || uploading}>儲存</Button>
       </DialogActions>
     </Dialog>
+    {confirmDialog}
+    </>
   );
 }
