@@ -11,7 +11,8 @@ import SettingsPage from "./SettingsPage";
 import DaySheet from "./DaySheet";
 import type { AppTab } from "../App";
 
-const NAV_BG = "#0d141d";
+// 導覽列底色與頁面背景相同：PWA 底部如果有沒填滿的地方，看起來也會是導覽列的一部分
+const NAV_BG = "#0a0f16";
 
 /**
  * 手機版面：整個 App 剛好一個螢幕高，上面是可以捲動的內容、下面接著導覽列。
