@@ -27,6 +27,11 @@ function writeCache(path: string, data: unknown) {
   }
 }
 
+/** 上次存在手機的資料（SWR 用來先顯示，再背景更新） */
+export function cachedValue<T>(path: string): T | undefined {
+  return readCache(path) as T | undefined;
+}
+
 export function clearCache() {
   try {
     for (const k of Object.keys(localStorage)) if (k.startsWith(CACHE_PREFIX)) localStorage.removeItem(k);
@@ -97,7 +102,11 @@ export const put = <T = any>(path: string, data: unknown) => api<T>(path, { meth
 export const del = (path: string) => api(path, { method: "DELETE" });
 
 export function useApi<T>(path: string | null, config?: SWRConfiguration) {
-  return useSWR<T>(path, (p: string) => api<T>(p), config);
+  // 打開 App 時先用上次的資料顯示（不會先空白），拿到新資料再更新
+  return useSWR<T>(path, (p: string) => api<T>(p), {
+    fallbackData: path ? cachedValue<T>(path) : undefined,
+    ...config,
+  });
 }
 
 /** 上傳前先在手機上縮圖，省流量也省空間 */

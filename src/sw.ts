@@ -1,11 +1,16 @@
 /// <reference lib="webworker" />
 // Service Worker：離線快取（PWA）＋好時段推播
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
+import { registerRoute } from "workbox-routing";
+import { CacheFirst } from "workbox-strategies";
 
 declare const self: ServiceWorkerGlobalScope;
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
+
+// 照片（縮圖與原圖）存在手機快取裡：看過一次之後，再打開就直接用，不用重新下載
+registerRoute(({ url }) => url.pathname.startsWith("/api/photos/"), new CacheFirst({ cacheName: "fish-photos" }));
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
