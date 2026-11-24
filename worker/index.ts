@@ -6,7 +6,6 @@ export interface Env {
   DB: D1Database;
   PHOTOS: R2Bucket;
   ASSETS: Fetcher;
-  APP_PASSWORD: string;
 }
 
 class HttpError extends Error {
@@ -101,7 +100,7 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   const method = req.method;
   const seg = path.split("/").filter(Boolean);
 
-  // 照片用不可猜的 key 公開讀取（<img> 無法帶密碼 header）
+  // 照片用不可猜的 key 當檔名
   if (method === "GET" && seg[0] === "photos" && seg[1]) {
     const obj = await env.PHOTOS.get(seg[1]);
     if (!obj) return new Response("not found", { status: 404 });
@@ -111,15 +110,6 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
         "cache-control": "public, max-age=31536000, immutable",
       },
     });
-  }
-
-  if (path === "/login" && method === "POST") {
-    const { password } = await body<{ password: string }>(req);
-    return json({ ok: password === env.APP_PASSWORD });
-  }
-
-  if (!env.APP_PASSWORD || req.headers.get("x-app-key") !== env.APP_PASSWORD) {
-    throw new HttpError(401, "密碼錯誤");
   }
 
   // ---- 釣點 ----

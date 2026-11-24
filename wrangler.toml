@@ -16,11 +16,10 @@ crons = ["*/20 * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "fish-db"
-database_id = "LOCAL_PLACEHOLDER"
+database_id = "5e434065-7f13-4828-94ae-938f1be5edad"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "PHOTOS"
 bucket_name = "fish-photos"
 
-# APP_PASSWORD 用 `wrangler secret put APP_PASSWORD` 設定，本地開發放 .dev.vars

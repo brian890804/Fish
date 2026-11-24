@@ -1,24 +1,5 @@
 import useSWR, { type SWRConfiguration } from "swr";
 
-const KEY_STORAGE = "fish.appKey";
-
-export function getAppKey(): string {
-  try {
-    return localStorage.getItem(KEY_STORAGE) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-export function setAppKey(key: string | null) {
-  try {
-    if (key) localStorage.setItem(KEY_STORAGE, key);
-    else localStorage.removeItem(KEY_STORAGE);
-  } catch {
-    /* 私密瀏覽模式等情況寫不進去就算了 */
-  }
-}
-
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -27,12 +8,10 @@ export class ApiError extends Error {
 
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set("x-app-key", getAppKey());
   if (init.body && typeof init.body === "string") headers.set("content-type", "application/json");
   const res = await fetch(`/api${path}`, { ...init, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    if (res.status === 401) window.dispatchEvent(new Event("fish:logout"));
     throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`);
   }
   return data as T;
@@ -51,7 +30,7 @@ export async function uploadPhoto(file: File): Promise<string> {
   const blob = await resizeImage(file, 1600, 0.82);
   const res = await fetch("/api/photos", {
     method: "POST",
-    headers: { "x-app-key": getAppKey(), "content-type": blob.type },
+    headers: { "content-type": blob.type },
     body: blob,
   });
   const data = await res.json().catch(() => ({}));

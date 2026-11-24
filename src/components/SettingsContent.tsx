@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Box, Button, Card, CardContent, TextField, Typography, Alert, Chip, Divider } from "@mui/material";
-import { post, put, setAppKey } from "../lib/api";
+import { post, put } from "../lib/api";
 import { useSpots } from "../hooks/useSpots";
 import type { Spot } from "../lib/types";
 
@@ -83,7 +83,6 @@ export default function SettingsContent() {
           {refreshMsg && <Typography variant="body2" sx={{ whiteSpace: "pre-line" }}>{refreshMsg}</Typography>}
         </CardContent>
       </Card>
-      <Button color="error" onClick={() => { setAppKey(null); window.dispatchEvent(new Event("fish:logout")); }}>登出</Button>
     </Box>
   );
 }

@@ -5,9 +5,7 @@ import InsightsIcon from "@mui/icons-material/InsightsRounded";
 import SettingsIcon from "@mui/icons-material/SettingsRounded";
 import RefreshIcon from "@mui/icons-material/RefreshRounded";
 import PlaceIcon from "@mui/icons-material/PlaceRounded";
-import LogoutIcon from "@mui/icons-material/LogoutRounded";
 import dayjs from "dayjs";
-import { setAppKey } from "../lib/api";
 import { useToday } from "../hooks/useToday";
 import { SquidIcon } from "../components/icons";
 import { spinSx } from "../lib/sx";
@@ -66,7 +64,7 @@ export default function Sidebar({ tab, onChange }: { tab: AppTab; onChange: (t: 
 
       <Box sx={{ flex: 1 }} />
 
-      <Box sx={{ borderRadius: 3, p: 1.5, bgcolor: "rgba(255,255,255,0.04)", border: 1, borderColor: "divider", mb: 1.5 }}>
+      <Box sx={{ borderRadius: 3, p: 1.5, bgcolor: "rgba(255,255,255,0.04)", border: 1, borderColor: "divider" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <PlaceIcon fontSize="small" color="primary" />
           <Typography sx={{ fontWeight: 700, flex: 1 }} noWrap>{t.fc.data?.spot.name ?? "…"}</Typography>
@@ -81,12 +79,6 @@ export default function Sidebar({ tab, onChange }: { tab: AppTab; onChange: (t: 
         </Typography>
         {t.sourceLabel && <Typography variant="caption" color="text.secondary">資料來源：{t.sourceLabel}</Typography>}
       </Box>
-      <Button
-        color="inherit" startIcon={<LogoutIcon />} sx={{ justifyContent: "flex-start", color: "text.secondary", px: 2 }}
-        onClick={() => { setAppKey(null); window.dispatchEvent(new Event("fish:logout")); }}
-      >
-        登出
-      </Button>
     </Box>
   );
 }

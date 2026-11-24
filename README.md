@@ -2,6 +2,8 @@
 
 記錄每次出釣（包含槓龜）的釣獲與當下海況，依照條件分析哪種天氣比較好釣。手機優先，可加到主畫面（PWA）。
 
+> 不需要登入：知道網址的人都能看到並修改資料，網址不要公開分享。
+
 ## 架構
 
 | 部分 | 技術 |
@@ -32,7 +34,7 @@
 ```bash
 pnpm install
 pnpm db:migrate:local
-pnpm dev:api   # Worker 跑在 :8787（密碼在 .dev.vars，預設 fish）
+pnpm dev:api   # Worker 跑在 :8787
 pnpm dev       # 前端，/api 代理到 :8787
 ```
 
@@ -47,7 +49,6 @@ pnpm dev       # 前端，/api 代理到 :8787
    npx wrangler d1 create fish-db        # 把輸出的 database_id 填進 wrangler.toml
    npx wrangler r2 bucket create fish-photos
    pnpm db:migrate:remote
-   npx wrangler secret put APP_PASSWORD  # 設定登入密碼
    ```
 
 3. 手動部署：`pnpm deploy`，網址是 `https://fish-log.<你的子網域>.workers.dev`。
