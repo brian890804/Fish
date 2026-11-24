@@ -55,7 +55,7 @@ export default function MobileApp({ tab, onTabChange }: { tab: AppTab; onTabChan
         <BottomNavigation
           value={tab}
           onChange={(_, v) => onTabChange(v)}
-          sx={{ maxWidth: 640, mx: "auto", bgcolor: "transparent", height: 60, "& .MuiSvgIcon-root": { fontSize: 28 } }}
+          sx={{ maxWidth: 640, mx: "auto", bgcolor: "transparent", height: 49, "& .MuiSvgIcon-root": { fontSize: 28 } }}
         >
           <BottomNavigationAction value="home" aria-label="今天" icon={<TodayIcon />} />
           <BottomNavigationAction value="calendar" aria-label="行事曆" icon={<CalendarIcon />} />
