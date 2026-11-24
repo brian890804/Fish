@@ -69,6 +69,8 @@ export interface Trip {
   id: number;
   spot_id: number;
   spot_name: string;
+  /** 前一天開始、跨過午夜的出釣（單日畫面用來標示） */
+  overnight?: number;
   date: string;
   start_at: number;
   end_at: number;

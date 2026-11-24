@@ -117,11 +117,16 @@ async function stretchTrip(env: Env, tripId: number, t: number) {
 }
 
 /** 一天的出釣、釣獲、以及每筆釣獲當下的天氣 */
-async function dayDetail(env: Env, date: string) {
+async function dayDetail(env: Env, date: string, overnight = false) {
+  // overnight：也包含前一天開始、跨過這天午夜的出釣（首頁「今日釣獲」用，夜釣才看得到還在進行的那趟）
+  const dayStart = twDayStart(date);
   const { results: trips } = await env.DB.prepare(
-    `SELECT t.*, s.name AS spot_name, COALESCE(s.weather_spot_id, s.id) AS weather_spot_id
-       FROM trips t JOIN spots s ON s.id = t.spot_id WHERE date = ? ORDER BY start_at`,
-  ).bind(date).all<any>();
+    `SELECT t.*, s.name AS spot_name, COALESCE(s.weather_spot_id, s.id) AS weather_spot_id,
+            CASE WHEN t.date <> ? THEN 1 ELSE 0 END AS overnight
+       FROM trips t JOIN spots s ON s.id = t.spot_id
+      WHERE t.date = ? OR (? = 1 AND t.start_at >= ? AND t.start_at < ? AND t.end_at > ?)
+      ORDER BY start_at`,
+  ).bind(date, date, overnight ? 1 : 0, dayStart - 86400, dayStart, dayStart).all<any>();
   if (trips.length === 0) return { date, trips: [] };
   const ids = trips.map((t) => t.id);
   const { results: catches } = await env.DB.prepare(
@@ -237,7 +242,7 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   if (path === "/day" && method === "GET") {
     const date = url.searchParams.get("date");
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, "日期格式錯誤");
-    return json(await dayDetail(env, date));
+    return json(await dayDetail(env, date, url.searchParams.get("overnight") === "1"));
   }
 
   // ---- 出釣 ----
@@ -282,10 +287,11 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const spot = await getSpot(env, q.spot_id ?? null);
     const species = q.species === "fish" ? "fish" : "squid";
     if (q.egi_color != null && !isEgiColor(q.egi_color)) throw new HttpError(400, "木蝦顏色不正確");
-    // 結束時間在 3 小時內的，算同一趟出釣
+    // 最近 24 小時內開始、而且還在進行（或結束不到 3 小時）的，算同一趟出釣。
+    // 不用日期判斷：夜釣跨過午夜時，週五晚上開始的那趟在週六凌晨也要接得上
     let trip = await env.DB.prepare(
-      "SELECT * FROM trips WHERE spot_id = ? AND date = ? AND end_at >= ? ORDER BY start_at DESC LIMIT 1",
-    ).bind(spot.id, twDate(now), now - 3 * 3600).first<{ id: number; start_at: number; end_at: number }>();
+      "SELECT * FROM trips WHERE spot_id = ? AND start_at >= ? AND end_at >= ? ORDER BY start_at DESC LIMIT 1",
+    ).bind(spot.id, now - 24 * 3600, now - 3 * 3600).first<{ id: number; start_at: number; end_at: number }>();
     let created = false;
     if (!trip) {
       // 新的一趟：從 30 分鐘前開始（通常到了一陣子才釣到），先抓到 1 小時後，之後記錄會自動撐開
@@ -299,7 +305,8 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
       "INSERT INTO catches (trip_id, caught_at, species, egi_color) VALUES (?, ?, ?, ?) RETURNING *",
     ).bind(trip!.id, now, species, q.egi_color ?? null).first();
     await stretchTrip(env, trip!.id, now);
-    return json({ catch: c, trip_id: trip!.id, trip_created: created, spot: { id: spot.id, name: spot.name }, date: twDate(now) }, 201);
+    // date 回傳出釣開始那天（跨夜時是前一天），「補資料」才打得開那趟
+    return json({ catch: c, trip_id: trip!.id, trip_created: created, spot: { id: spot.id, name: spot.name }, date: twDate(trip!.start_at) }, 201);
   }
 
   // ---- 釣獲 ----

@@ -71,7 +71,7 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
                   {t.day.data!.trips.map((trip) => (
                     <Typography key={trip.id} variant="body2" color="text.secondary">
-                      {hm(trip.start_at)} – {hm(trip.end_at)} · {trip.spot_name} · {trip.catches.length} 隻
+                      {trip.overnight ? "（從昨天延續）" : ""}{hm(trip.start_at)} – {hm(trip.end_at)} · {trip.spot_name} · {trip.catches.length} 隻
                     </Typography>
                   ))}
                 </Box>

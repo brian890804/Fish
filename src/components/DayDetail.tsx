@@ -4,6 +4,7 @@ import EditIcon from "@mui/icons-material/EditRounded";
 import DeleteIcon from "@mui/icons-material/DeleteOutlineRounded";
 import AddIcon from "@mui/icons-material/AddRounded";
 import { useSWRConfig } from "swr";
+import dayjs from "dayjs";
 import { del, photoUrl, useApi } from "../lib/api";
 import type { Catch, DayDetail, Trip, WeatherHour } from "../lib/types";
 import { hm, kn, fmt1 } from "../lib/format";
@@ -121,7 +122,8 @@ function CatchRow({ c, trip, onClick, onPhotos }: { c: Catch; trip: Trip; onClic
 /** 某一天的出釣與釣獲（手機版放在全螢幕 Dialog，電腦版放在右側面板） */
 export default function DayDetail({ date }: { date: string | null }) {
   const { mutate: globalMutate } = useSWRConfig();
-  const day = useApi<DayDetail>(date ? `/day?date=${date}` : null);
+  // 也列出前一天開始、跨過這天午夜的出釣（標示「從前一天延續」）
+  const day = useApi<DayDetail>(date ? `/day?date=${date}&overnight=1` : null);
   const [tripDialog, setTripDialog] = useState<{ open: boolean; trip?: Trip | null }>({ open: false });
   const [catchDialog, setCatchDialog] = useState<{ open: boolean; trip: Trip | null; item?: Catch | null }>({ open: false, trip: null });
   const [confirmDialog, confirm] = useConfirm();
@@ -172,7 +174,15 @@ export default function DayDetail({ date }: { date: string | null }) {
                   <CardContent>
                     <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
                       <Box sx={{ flex: 1 }}>
-                        <Typography sx={{ fontWeight: 800, fontSize: 18 }}>{hm(t.start_at)} – {hm(t.end_at)}</Typography>
+                        {t.overnight ? (
+                          <Chip size="small" label={`從 ${dayjs(t.date).format("M/D")} 延續（跨夜）`} sx={{ mb: 0.5, height: 22, fontSize: 11.5, fontWeight: 700, bgcolor: "rgba(167,139,250,0.16)", color: "#c4b5fd" }} />
+                        ) : null}
+                        <Typography sx={{ fontWeight: 800, fontSize: 18 }}>
+                          {hm(t.start_at)} – {hm(t.end_at)}
+                          {dayjs.unix(t.end_at).format("YYYY-MM-DD") !== dayjs.unix(t.start_at).format("YYYY-MM-DD") && (
+                            <Box component="span" sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", ml: 0.5 }}>（隔天）</Box>
+                          )}
+                        </Typography>
                         <Typography variant="caption" color="text.secondary">{t.spot_name} · {((t.end_at - t.start_at) / 3600).toFixed(1)} 小時</Typography>
                       </Box>
                       <IconButton size="small" onClick={() => setTripDialog({ open: true, trip: t })}><EditIcon fontSize="small" /></IconButton>

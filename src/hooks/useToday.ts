@@ -17,7 +17,8 @@ const REFRESH_MS = 20 * 60 * 1000;
 export function useToday() {
   const today = dayjs().format("YYYY-MM-DD");
   const fc = useApi<ForecastResponse>("/forecast?days=7", { refreshInterval: REFRESH_MS });
-  const day = useApi<DayDetail>(`/day?date=${today}`);
+  // 夜釣跨過午夜：前一天開始、還在進行的那趟也算進「今日釣獲」
+  const day = useApi<DayDetail>(`/day?date=${today}&overnight=1`);
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = async () => {
