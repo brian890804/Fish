@@ -11,6 +11,9 @@ import type { Catch, Species, Trip } from "../lib/types";
 import { SpeciesIcon } from "./icons";
 import EgiColorPicker from "./EgiColorPicker";
 import PhotoViewer from "./PhotoViewer";
+import { readPhotoMeta } from "../lib/exif";
+import { nearestSpot } from "../lib/geo";
+import { useSpots } from "../hooks/useSpots";
 import { useConfirm } from "./useConfirm";
 
 interface Props {
@@ -29,6 +32,11 @@ const numOrNull = (s: string) => (s.trim() === "" || !Number.isFinite(Number(s))
 export default function CatchDialog({ open, trip, item, onClose, onSaved }: Props) {
   const [species, setSpecies] = useState<Species>("squid");
   const [time, setTime] = useState("");
+  // 使用者自己改過時間，就不用照片的拍攝時間覆蓋
+  const [timeTouched, setTimeTouched] = useState(false);
+  const [photoHint, setPhotoHint] = useState("");
+  const [spotSuggest, setSpotSuggest] = useState<{ id: number; name: string } | null>(null);
+  const spots = useSpots();
   const [length, setLength] = useState("");
   const [weight, setWeight] = useState("");
   const [fishName, setFishName] = useState("");
@@ -49,6 +57,9 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
     if (item) {
       setSpecies(item.species);
       setTime(dayjs.unix(item.caught_at).format("HH:mm"));
+      setTimeTouched(true);
+      setPhotoHint("");
+      setSpotSuggest(null);
       setLength(item.length_cm?.toString() ?? "");
       setWeight(item.weight_g?.toString() ?? "");
       setFishName(item.fish_name ?? "");
@@ -61,6 +72,9 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       const t = now >= trip.start_at - 3600 && now <= trip.end_at + 3 * 3600 ? now : trip.start_at;
       setSpecies("squid");
       setTime(dayjs.unix(t).format("HH:mm"));
+      setTimeTouched(false);
+      setPhotoHint("");
+      setSpotSuggest(null);
       setLength("");
       setWeight("");
       setFishName("");
@@ -80,6 +94,37 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
     return t.unix();
   };
 
+  /** 照片的拍攝時間 → 自動填釣到時間；照片位置跟這趟的釣點不同 → 建議改釣點 */
+  const applyPhotoMeta = async (files: File[]) => {
+    if (!trip) return;
+    for (const f of files) {
+      const meta = await readPhotoMeta(f);
+      // 拍攝時間落在這趟出釣前 2 小時到結束後 6 小時內，才當成釣到的時間
+      if (meta.takenAt && !timeTouched && !item && meta.takenAt >= trip.start_at - 2 * 3600 && meta.takenAt <= trip.end_at + 6 * 3600) {
+        setTime(dayjs.unix(meta.takenAt).format("HH:mm"));
+        setTimeTouched(true);
+        setPhotoHint(`釣到時間已依照片設定為 ${dayjs.unix(meta.takenAt).format("HH:mm")}（照片的拍攝時間）`);
+      }
+      if (meta.lat != null && meta.lon != null && spots.data) {
+        const near = nearestSpot(spots.data, { lat: meta.lat, lon: meta.lon });
+        if (near && near.spot.id !== trip.spot_id) setSpotSuggest({ id: near.spot.id, name: near.spot.name });
+      }
+      if (meta.takenAt || meta.lat != null) break; // 用第一張有資訊的照片就好
+    }
+  };
+
+  const moveTripToSuggested = async () => {
+    if (!trip || !spotSuggest) return;
+    try {
+      await put(`/trips/${trip.id}`, { spot_id: spotSuggest.id, start_at: trip.start_at, end_at: trip.end_at, note: trip.note });
+      setPhotoHint(`這趟出釣已改成「${spotSuggest.name}」`);
+      setSpotSuggest(null);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   // 一次可以選多張，一張一張壓縮上傳，最多 6 張
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -89,6 +134,8 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
     if (files.length > room) setError(`一筆最多 ${MAX_PHOTOS} 張，只會上傳前 ${room} 張`);
     else setError("");
     const todo = files.slice(0, Math.max(0, room));
+    // 先讀照片的拍攝時間與位置（只在手機上讀，不會上傳）
+    applyPhotoMeta(todo);
     setUploading(true);
     setUploadingCount(todo.length);
     try {
@@ -166,7 +213,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
 
           {species === "fish" && <TextField label="魚名" value={fishName} onChange={(e) => setFishName(e.target.value)} placeholder="例如：黑鯛" />}
 
-          <TextField type="time" label="釣到時間" value={time} onChange={(e) => setTime(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField type="time" label="釣到時間" value={time} onChange={(e) => { setTime(e.target.value); setTimeTouched(true); }} slotProps={{ inputLabel: { shrink: true } }} />
           <Box sx={{ display: "flex", gap: 2 }}>
             <TextField
               label={species === "squid" ? "胴長" : "全長"} value={length} onChange={(e) => setLength(e.target.value)} fullWidth
@@ -215,6 +262,16 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
             <Button variant="outlined" startIcon={uploading ? <CircularProgress size={18} /> : <PhotoIcon />} onClick={() => fileRef.current?.click()} disabled={uploading}>
               {uploading ? "上傳中…" : photos.length ? `再加照片（${photos.length}/${MAX_PHOTOS}）` : "加照片（可一次選多張）"}
             </Button>
+          )}
+          {photoHint && <Alert severity="info" onClose={() => setPhotoHint("")}>{photoHint}</Alert>}
+          {spotSuggest && trip && (
+            <Alert
+              severity="warning"
+              onClose={() => setSpotSuggest(null)}
+              action={<Button color="inherit" size="small" onClick={moveTripToSuggested} sx={{ fontWeight: 800, whiteSpace: "nowrap" }}>改成{spotSuggest.name}</Button>}
+            >
+              照片是在「{spotSuggest.name}」附近拍的，這趟出釣目前是「{trip.spot_name}」。
+            </Alert>
           )}
           {error && <Alert severity="error">{error}</Alert>}
         </Box>
