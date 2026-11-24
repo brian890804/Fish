@@ -2,6 +2,7 @@ import { Box, Typography } from "@mui/material";
 import dayjs from "dayjs";
 import type { CalendarDay } from "../lib/types";
 import { SpeciesIcon } from "./icons";
+import { TurtleIcon } from "./icons";
 
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
 
@@ -47,7 +48,7 @@ export default function MonthGrid({ cells, byDate, selected, onSelect, size = "s
             {info && (
               <Box sx={{ flex: 1, display: "flex", flexDirection: lg ? "row" : "column", gap: lg ? 0.75 : 0, alignItems: "center", justifyContent: "center" }}>
                 {total === 0 ? (
-                  <Typography sx={{ fontSize: lg ? 13 : 11, color: "text.secondary" }}>槓龜</Typography>
+                  <TurtleIcon titleAccess="槓龜" sx={{ fontSize: lg ? 36 : 28 }} />
                 ) : (
                   <>
                     {info.squid > 0 && (

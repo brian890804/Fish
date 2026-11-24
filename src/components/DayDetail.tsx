@@ -10,6 +10,7 @@ import type { Catch, DayDetail, Trip, WeatherHour } from "../lib/types";
 import { hm, kn, fmt1 } from "../lib/format";
 import { TIDE_LABEL, dirName16, meanDirection, hourFloor, moonAt, tideFromEvents, tideState, type TideEvent } from "../../shared/conditions";
 import { SpeciesIcon, SPECIES_LABEL } from "./icons";
+import { TurtleIcon } from "./icons";
 import CatchCount from "./CatchCount";
 import TripDialog from "./TripDialog";
 import CatchDialog from "./CatchDialog";
@@ -190,7 +191,10 @@ export default function DayDetail({ date }: { date: string | null }) {
                     </Box>
                     <Box sx={{ display: "flex", gap: 2, alignItems: "center", mb: 1.5 }}>
                       {squid + fish === 0 ? (
-                        <Chip label="槓龜" variant="outlined" />
+                        <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+                          <TurtleIcon titleAccess="槓龜" sx={{ fontSize: 40 }} />
+                          <Typography sx={{ fontWeight: 800, color: "text.secondary" }}>槓龜</Typography>
+                        </Box>
                       ) : (
                         <>
                           {squid > 0 && <CatchCount species="squid" count={squid} size={40} />}

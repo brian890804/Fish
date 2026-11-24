@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 import { useCalendar } from "../hooks/useCalendar";
 import MonthGrid from "../components/MonthGrid";
 import CatchCount from "../components/CatchCount";
+import BlankCount from "../components/BlankCount";
 import DayDetail from "../components/DayDetail";
 import PageHeader from "./PageHeader";
 
@@ -41,13 +42,10 @@ export default function CalendarPage() {
                 <Typography variant="caption" color="text.secondary">本月出釣</Typography>
                 <Typography sx={{ fontWeight: 800, fontSize: 24 }}>{cal.totals.trips} 次</Typography>
               </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">槓龜</Typography>
-                <Typography sx={{ fontWeight: 800, fontSize: 24 }}>{cal.totals.blank} 天</Typography>
-              </Box>
               <Box sx={{ flex: 1 }} />
               <CatchCount species="squid" count={cal.totals.squid} size={40} />
               {cal.totals.fish > 0 && <CatchCount species="fish" count={cal.totals.fish} size={34} />}
+              <BlankCount count={cal.totals.blank} size={34} />
             </Box>
             <MonthGrid cells={cal.cells} byDate={cal.byDate} selected={selected} onSelect={setSelected} size="lg" />
           </CardContent>

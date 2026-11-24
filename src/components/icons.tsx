@@ -107,6 +107,69 @@ export function FishIcon(props: SvgIconProps) {
   );
 }
 
+/** 槓龜：綠色小烏龜（側面，龜殼有六角紋、高光與陰影） */
+export function TurtleIcon(props: SvgIconProps) {
+  const id = useId().replace(/:/g, "");
+  const g = (n: string) => `${id}-${n}`;
+  return (
+    <SvgIcon viewBox="0 0 64 64" {...props}>
+      <defs>
+        <linearGradient id={g("shell")} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#86efac" />
+          <stop offset="0.5" stopColor="#22c55e" />
+          <stop offset="1" stopColor="#15803d" />
+        </linearGradient>
+        <linearGradient id={g("skin")} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#bef264" />
+          <stop offset="1" stopColor="#65a30d" />
+        </linearGradient>
+        <linearGradient id={g("belly")} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fde68a" />
+          <stop offset="1" stopColor="#d9a52b" />
+        </linearGradient>
+        <radialGradient id={g("shadow")} cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#000" stopOpacity="0.35" />
+          <stop offset="1" stopColor="#000" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      <ellipse cx="31" cy="55" rx="24" ry="3" fill={`url(#${g("shadow")})`} />
+
+      {/* 腳與尾巴（在殼後面） */}
+      <g fill={`url(#${g("skin")})`} stroke={OUTLINE} strokeWidth="1.5" strokeLinejoin="round">
+        <path d="M8.5 40 C5 40.5 3.5 43 5 44.5 C7 45.5 10 44 12 42 Z" />
+        <path d="M14 43 C13 48 13.5 52 16.5 53 C19.5 53.5 21 51 20.5 46 Z" />
+        <path d="M37 44 C36.5 49 37 52.5 40 53 C43 53.4 44.5 50.5 43.5 45.5 Z" />
+        <path d="M24 44.5 C23.5 49.5 24 52.5 27 53 C30 53.3 31 50.5 30.5 46 Z" opacity="0.85" />
+      </g>
+
+      {/* 頭與脖子 */}
+      <path d="M45 37 C48 33 52 30.5 56 31 C60.5 31.5 62 35.5 60.5 39 C59 42 55 43 51 42.5 C48.5 42.2 46.5 41 45 40 Z"
+        fill={`url(#${g("skin")})`} stroke={OUTLINE} strokeWidth="1.6" strokeLinejoin="round" />
+      <circle cx="55.5" cy="35.4" r="2.1" fill="#0f172a" />
+      <circle cx="54.9" cy="34.7" r="0.7" fill="#fff" />
+      <path d="M57.5 39.5 C58.6 39.4 59.5 38.9 60 38.2" fill="none" stroke={OUTLINE} strokeWidth="1.1" strokeLinecap="round" />
+      <ellipse cx="57.6" cy="37.6" rx="1.3" ry="0.8" fill="#f9a8d4" opacity="0.6" />
+
+      {/* 腹甲（殼下緣） */}
+      <path d="M9 41 C14 46 24 47.5 33 47 C40 46.6 45 44.5 47.5 41 Z" fill={`url(#${g("belly")})`} stroke={OUTLINE} strokeWidth="1.5" strokeLinejoin="round" />
+
+      {/* 龜殼 */}
+      <path d="M8 41.5 C8 27 18 16 29 16 C40.5 16 49.5 26 48.5 41 C40 43.5 17 43.5 8 41.5 Z"
+        fill={`url(#${g("shell")})`} stroke={OUTLINE} strokeWidth="1.8" strokeLinejoin="round" />
+      {/* 六角殼紋 */}
+      <g fill="none" stroke="#14532d" strokeWidth="1.3" strokeLinejoin="round" opacity="0.75">
+        <path d="M23 23.5 L35 23.5 L39 31 L35 38.5 L23 38.5 L19 31 Z" />
+        <path d="M23 23.5 L19.5 18.5 M35 23.5 L38.5 18.8 M39 31 L46.5 31 M35 38.5 L37.5 42.5 M23 38.5 L20.5 42.6 M19 31 L10.5 31" />
+      </g>
+      {/* 殼片中間淡色，做出立體感 */}
+      <path d="M24.5 26 L33.5 26 L36.2 31 L33.5 36 L24.5 36 L21.8 31 Z" fill="#bbf7d0" opacity="0.28" />
+      {/* 高光 */}
+      <path d="M14 33 C14.5 26 19.5 20.5 26.5 19" fill="none" stroke="#f0fdf4" strokeWidth="2.2" strokeLinecap="round" opacity="0.7" />
+    </SvgIcon>
+  );
+}
+
 export function SpeciesIcon({ species, ...props }: SvgIconProps & { species: Species }) {
   const Icon = species === "squid" ? SquidIcon : FishIcon;
   return <Icon {...props} />;

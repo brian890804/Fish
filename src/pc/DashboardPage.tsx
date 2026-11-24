@@ -13,6 +13,8 @@ import CatchCount from "../components/CatchCount";
 import ForecastTable from "../components/ForecastTable";
 import DailyOutlook from "../components/DailyOutlook";
 import { SpeciesIcon } from "../components/icons";
+import { TurtleIcon } from "../components/icons";
+import BlankCount from "../components/BlankCount";
 import PageHeader from "./PageHeader";
 import QuickCatchButton from "../components/QuickCatchButton";
 
@@ -98,7 +100,7 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
               </Box>
               <Box sx={{ bgcolor: "rgba(255,255,255,0.04)", borderRadius: 2, p: 1.5 }}>
                 <Typography variant="caption" color="text.secondary">槓龜</Typography>
-                <Typography sx={{ fontWeight: 800, fontSize: 22 }}>{cal.totals.blank} 天</Typography>
+                <Box sx={{ mt: 0.5 }}><BlankCount count={cal.totals.blank} size={26} /></Box>
               </Box>
             </Box>
           </CardContent>
@@ -127,7 +129,7 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
                     <Typography sx={{ fontWeight: 700 }}>{dayjs(d.date).format("M/D dd")}</Typography>
                     <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", mt: 0.5, minHeight: 32 }}>
                       {d.squid + d.fish === 0 ? (
-                        <Typography color="text.secondary">槓龜</Typography>
+                        <TurtleIcon titleAccess="槓龜" sx={{ fontSize: 30 }} />
                       ) : (
                         <>
                           {d.squid > 0 && <Box sx={{ display: "flex", alignItems: "center" }}><SpeciesIcon species="squid" sx={{ fontSize: 28 }} /><Typography sx={{ fontWeight: 800, fontSize: 20 }}>{d.squid}</Typography></Box>}

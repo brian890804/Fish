@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 import { useCalendar } from "../hooks/useCalendar";
 import CatchCount from "../components/CatchCount";
 import MonthGrid from "../components/MonthGrid";
+import BlankCount from "../components/BlankCount";
 
 export default function CalendarPage({ onOpenDate }: { onOpenDate: (d: string) => void }) {
   const [month, setMonth] = useState(() => dayjs().startOf("month"));
@@ -26,6 +27,7 @@ export default function CalendarPage({ onOpenDate }: { onOpenDate: (d: string) =
           </Box>
           <CatchCount species="squid" count={cal.totals.squid} size={34} />
           {cal.totals.fish > 0 && <CatchCount species="fish" count={cal.totals.fish} size={34} />}
+          <BlankCount count={cal.totals.blank} size={30} />
         </CardContent>
       </Card>
       <MonthGrid cells={cal.cells} byDate={cal.byDate} onSelect={onOpenDate} />
