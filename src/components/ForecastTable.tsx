@@ -226,7 +226,7 @@ function ForecastTableInner({
             <Box sx={{ ...cell, height: HEAD_H, flexDirection: "column", lineHeight: 1.15, bgcolor: SURFACE.raised, boxShadow: "none" }}>
               {/* 每天第一格顯示日期，例如 11/24；底下一律顯示小時，例如 14h */}
               <span style={{ fontWeight: 800, fontSize: 11, letterSpacing: "-0.02em", whiteSpace: "nowrap", color: newDay ? "#5cc8ff" : "transparent" }}>
-                {newDay ? d.format("M/D") : "·"}
+                {newDay ? `${d.format("M/D")}${d.format("dd")}` : "·"}
               </span>
               <span style={{ fontSize: 13, fontWeight: 800, color: isNow ? "#5cc8ff" : TEXT.primary }}>{d.format("HH")}h</span>
             </Box>
