@@ -16,7 +16,6 @@ import { SpeciesIcon } from "../components/icons";
 import { TurtleIcon } from "../components/icons";
 import BlankCount from "../components/BlankCount";
 import PageHeader from "./PageHeader";
-import QuickCatchButton from "../components/QuickCatchButton";
 
 function greeting() {
   const h = dayjs().hour();
@@ -80,7 +79,6 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
               </>
             )}
             <Box sx={{ flex: 1 }} />
-            <Box sx={{ mt: 2 }}><QuickCatchButton onOpenDate={onOpenDate} compact /></Box>
             <Button sx={{ alignSelf: "flex-start", mt: 1 }} endIcon={<ChevronIcon />} onClick={() => onOpenDate(t.today)}>查看今天</Button>
           </CardContent>
         </Card>

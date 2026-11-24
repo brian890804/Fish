@@ -23,7 +23,7 @@ export default function DesktopApp({ tab, onTabChange }: { tab: AppTab; onTabCha
         <Box sx={{ maxWidth: 1400, mx: "auto" }}>
           {tab === "home" && <DashboardPage onOpenDate={setOpenDate} onGoCalendar={() => onTabChange("calendar")} />}
           {tab === "calendar" && <CalendarPage />}
-          {tab === "analysis" && <AnalysisPage />}
+          {tab === "analysis" && <AnalysisPage onOpenDate={setOpenDate} />}
           {tab === "settings" && <SettingsPage />}
         </Box>
       </Box>

@@ -7,13 +7,13 @@ import EgiCard from "../components/analysis/EgiCard";
 import RecordsCard from "../components/analysis/RecordsCard";
 import FactorCard, { SCORE_HELP } from "../components/analysis/FactorCard";
 
-export default function AnalysisPage() {
+export default function AnalysisPage({ onOpenDate }: { onOpenDate?: (d: string) => void }) {
   const a = useAnalysis();
   const { data } = a;
   return (
     <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
       <Typography variant="h5">釣況分析</Typography>
-      <RecordsCard />
+      <RecordsCard onOpenDate={onOpenDate} />
       <AnalysisFilters a={a} />
       {a.error && <Alert severity="error">{a.error.message}</Alert>}
       {a.isLoading || !data ? (

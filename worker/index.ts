@@ -280,35 +280,6 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     return json({ ok: true });
   }
 
-  // ---- 快速記一隻：找今天這個釣點還在進行中的出釣，沒有就開一段新的，再記一隻軟絲 ----
-  if (path === "/quick-catch" && method === "POST") {
-    const q = await body<{ spot_id?: number; egi_color?: string | null; species?: "squid" | "fish" }>(req);
-    const now = Math.floor(Date.now() / 1000);
-    const spot = await getSpot(env, q.spot_id ?? null);
-    const species = q.species === "fish" ? "fish" : "squid";
-    if (q.egi_color != null && !isEgiColor(q.egi_color)) throw new HttpError(400, "木蝦顏色不正確");
-    // 最近 24 小時內開始、而且還在進行（或結束不到 3 小時）的，算同一趟出釣。
-    // 不用日期判斷：夜釣跨過午夜時，週五晚上開始的那趟在週六凌晨也要接得上
-    let trip = await env.DB.prepare(
-      "SELECT * FROM trips WHERE spot_id = ? AND start_at >= ? AND end_at >= ? ORDER BY start_at DESC LIMIT 1",
-    ).bind(spot.id, now - 24 * 3600, now - 3 * 3600).first<{ id: number; start_at: number; end_at: number }>();
-    let created = false;
-    if (!trip) {
-      // 新的一趟：從 30 分鐘前開始（通常到了一陣子才釣到），先抓到 1 小時後，之後記錄會自動撐開
-      trip = await env.DB.prepare(
-        "INSERT INTO trips (spot_id, date, start_at, end_at, note) VALUES (?, ?, ?, ?, NULL) RETURNING *",
-      ).bind(spot.id, twDate(now), now - 1800, now + 3600).first();
-      created = true;
-      await ensureWeather(env.DB, await weatherSpotOf(env, spot), now - 1800, now + 3600).catch((e) => console.error("補抓天氣失敗", e));
-    }
-    const c = await env.DB.prepare(
-      "INSERT INTO catches (trip_id, caught_at, species, egi_color) VALUES (?, ?, ?, ?) RETURNING *",
-    ).bind(trip!.id, now, species, q.egi_color ?? null).first();
-    await stretchTrip(env, trip!.id, now);
-    // date 回傳出釣開始那天（跨夜時是前一天），「補資料」才打得開那趟
-    return json({ catch: c, trip_id: trip!.id, trip_created: created, spot: { id: spot.id, name: spot.name }, date: twDate(trip!.start_at) }, 201);
-  }
-
   // ---- 釣獲 ----
   if (path === "/catches" && method === "POST") {
     const c = await body<CatchInput>(req);

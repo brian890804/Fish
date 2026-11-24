@@ -1,4 +1,5 @@
-import { Box, Card, CardContent, Skeleton, Typography } from "@mui/material";
+import { Box, ButtonBase, Card, CardContent, Skeleton, Typography } from "@mui/material";
+import ChevronIcon from "@mui/icons-material/ChevronRightRounded";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEventsRounded";
 import dayjs from "dayjs";
 import { photoUrl, useApi } from "../../lib/api";
@@ -14,7 +15,8 @@ interface Records {
 const MEDAL = ["#fbbf24", "#cbd5e1", "#d97706"];
 
 /** 個人紀錄：最大隻排行＋每月平均胴長與數量（看季節性） */
-export default function RecordsCard() {
+/** onOpenDate：點排行榜的某一筆，打開那天的出釣紀錄 */
+export default function RecordsCard({ onOpenDate }: { onOpenDate?: (date: string) => void }) {
   const { data } = useApi<Records>("/records?species=squid");
 
   if (!data) return <Skeleton variant="rounded" height={260} sx={{ borderRadius: 4 }} />;
@@ -33,7 +35,19 @@ export default function RecordsCard() {
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {data.top.map((c, i) => (
-              <Box key={c.id} sx={{ display: "flex", alignItems: "center", gap: 1.5, p: 1, borderRadius: 2.5, bgcolor: i === 0 ? "rgba(251,191,36,0.08)" : SURFACE.raised }}>
+              <ButtonBase
+                key={c.id}
+                onClick={() => onOpenDate?.(c.date)}
+                disabled={!onOpenDate}
+                aria-label={`打開 ${dayjs(c.date).format("M/D")} 的出釣紀錄`}
+                sx={{
+                  display: "flex", alignItems: "center", gap: 1.5, p: 1, borderRadius: 2.5, width: "100%", textAlign: "left", justifyContent: "flex-start",
+                  bgcolor: i === 0 ? "rgba(251,191,36,0.08)" : SURFACE.raised,
+                  transition: "background-color .15s, transform .1s",
+                  "&:hover": { bgcolor: i === 0 ? "rgba(251,191,36,0.14)" : "rgba(148,163,184,0.14)" },
+                  "&:active": { transform: "scale(0.99)" },
+                }}
+              >
                 <Box sx={{ width: 28, textAlign: "center", flexShrink: 0 }}>
                   {i < 3 ? <EmojiEventsIcon sx={{ color: MEDAL[i], fontSize: 24 }} /> : <Typography sx={{ fontWeight: 800, color: TEXT.secondary }}>{i + 1}</Typography>}
                 </Box>
@@ -52,7 +66,8 @@ export default function RecordsCard() {
                     {dayjs(c.date).format("YYYY/M/D")} {dayjs.unix(c.caught_at).format("HH:mm")} · {c.spot_name}
                   </Typography>
                 </Box>
-              </Box>
+                {onOpenDate && <ChevronIcon sx={{ color: TEXT.muted, flexShrink: 0 }} />}
+              </ButtonBase>
             ))}
           </Box>
         )}

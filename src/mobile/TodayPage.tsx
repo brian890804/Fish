@@ -8,7 +8,6 @@ import { useToday } from "../hooks/useToday";
 import ForecastTable from "../components/ForecastTable";
 import CatchCount from "../components/CatchCount";
 import ConditionsGrid from "../components/ConditionsGrid";
-import QuickCatchButton from "../components/QuickCatchButton";
 import { spinSx } from "../lib/sx";
 import { TEXT } from "../theme";
 
@@ -32,9 +31,6 @@ export default function TodayPage({ onOpenDate }: { onOpenDate: (d: string) => v
           <RefreshIcon sx={spinSx(t.refreshing)} />
         </IconButton>
       </Box>
-
-      {/* 快速記一隻：岸邊手濕、天黑時一按就記 */}
-      <QuickCatchButton onOpenDate={onOpenDate} />
 
       {/* 今日釣獲 */}
       <Card>

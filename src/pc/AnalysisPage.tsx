@@ -8,13 +8,13 @@ import RecordsCard from "../components/analysis/RecordsCard";
 import FactorCard, { SCORE_HELP } from "../components/analysis/FactorCard";
 import PageHeader from "./PageHeader";
 
-export default function AnalysisPage() {
+export default function AnalysisPage({ onOpenDate }: { onOpenDate?: (d: string) => void }) {
   const a = useAnalysis();
   const { data } = a;
   return (
     <>
       <PageHeader title="釣況分析" subtitle="依照區間彙總，找出什麼條件下比較好釣" />
-      <Box sx={{ mb: 2.5 }}><RecordsCard /></Box>
+      <Box sx={{ mb: 2.5 }}><RecordsCard onOpenDate={onOpenDate} /></Box>
       <Card sx={{ mb: 2.5 }}>
         <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
           <AnalysisFilters a={a} inline />
