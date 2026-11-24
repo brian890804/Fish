@@ -29,7 +29,7 @@ const ROWS: Row[] = [
 
 const LABEL_W = 62;
 
-export default function ForecastTable({ hours, step = 3, cellWidth = 34, rowHeight = 24 }: { hours: ForecastHour[]; step?: number; cellWidth?: number; rowHeight?: number }) {
+export default function ForecastTable({ hours, step = 2, cellWidth = 34, rowHeight = 24 }: { hours: ForecastHour[]; step?: number; cellWidth?: number; rowHeight?: number }) {
   const CELL_W = cellWidth;
   const nowHour = dayjs().startOf("hour").unix();
   const cols = hours.filter((h) => h.time >= nowHour - 3600 * (step - 1) && dayjs.unix(h.time).hour() % step === 0);

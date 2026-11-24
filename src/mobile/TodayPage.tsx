@@ -13,7 +13,7 @@ import { spinSx } from "../lib/sx";
 
 export default function TodayPage({ onOpenDate }: { onOpenDate: (d: string) => void }) {
   const t = useToday();
-  const [step, setStep] = useState(3);
+  const [step, setStep] = useState(2);
 
   return (
     <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -80,6 +80,7 @@ export default function TodayPage({ onOpenDate }: { onOpenDate: (d: string) => v
           <Typography variant="h6" sx={{ flex: 1 }}>一週預報</Typography>
           <ToggleButtonGroup size="small" exclusive value={step} onChange={(_, v) => v && setStep(v)}>
             <ToggleButton value={1}>1h</ToggleButton>
+            <ToggleButton value={2}>2h</ToggleButton>
             <ToggleButton value={3}>3h</ToggleButton>
           </ToggleButtonGroup>
         </Box>

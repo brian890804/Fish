@@ -27,7 +27,7 @@ function greeting() {
 export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate: (d: string) => void; onGoCalendar: () => void }) {
   const t = useToday();
   const cal = useCalendar(dayjs().startOf("month"));
-  const [step, setStep] = useState(3);
+  const [step, setStep] = useState(2);
   const recent = [...(cal.data ?? [])].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
 
   return (
@@ -181,6 +181,7 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
               )}
               <ToggleButtonGroup size="small" exclusive value={step} onChange={(_, v) => v && setStep(v)}>
                 <ToggleButton value={1}>1 小時</ToggleButton>
+                <ToggleButton value={2}>2 小時</ToggleButton>
                 <ToggleButton value={3}>3 小時</ToggleButton>
               </ToggleButtonGroup>
             </Box>
