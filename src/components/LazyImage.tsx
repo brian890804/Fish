@@ -4,19 +4,29 @@ import BrokenIcon from "@mui/icons-material/ImageNotSupportedRounded";
 import { SURFACE, TEXT } from "../theme";
 
 /**
- * 圖片：載入前先顯示灰色佔位（骨架），載入完成淡入；失敗顯示圖示。
- * 用在照片縮圖、大圖，避免畫面一片空白、一張一張跳出來。
+ * 圖片：每次都用漸層淡入，不會突然跳出來。
+ * - 還沒載入：先顯示灰色骨架
+ * - 已經在快取裡：骨架直接不出現，圖片從透明慢慢變清楚
+ * - 載入完成：骨架消失，圖片從透明慢慢變清楚
  */
 export default function LazyImage({
   src, alt = "", sx, onClick, ariaLabel, fit = "cover",
 }: { src: string; alt?: string; sx?: object; onClick?: () => void; ariaLabel?: string; fit?: "cover" | "contain" }) {
-  const [state, setState] = useState<"loading" | "ok" | "error">("loading");
+  const [skeleton, setSkeleton] = useState(true);
+  const [shown, setShown] = useState(false);
+  const [error, setError] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
-  // 圖片已經在瀏覽器快取裡：畫面上直接顯示，不要先灰底再淡入
+
+  // 已經在快取裡：不顯示骨架，等下一幀再把透明度拉到 1，這樣淡入動畫才會播
   useLayoutEffect(() => {
     const el = imgRef.current;
-    if (el && el.complete && el.naturalWidth > 0) setState("ok");
+    if (el && el.complete && el.naturalWidth > 0) {
+      setSkeleton(false);
+      const r = requestAnimationFrame(() => setShown(true));
+      return () => cancelAnimationFrame(r);
+    }
   }, [src]);
+
   return (
     <Box
       role={onClick ? "button" : undefined}
@@ -24,10 +34,10 @@ export default function LazyImage({
       onClick={onClick}
       sx={{ position: "relative", overflow: "hidden", bgcolor: SURFACE.raised, ...sx }}
     >
-      {state === "loading" && (
+      {skeleton && !error && (
         <Skeleton variant="rectangular" animation="wave" sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", bgcolor: "rgba(148,163,184,0.12)" }} />
       )}
-      {state === "error" ? (
+      {error ? (
         <Box sx={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: TEXT.muted }}>
           <BrokenIcon />
         </Box>
@@ -39,11 +49,14 @@ export default function LazyImage({
           alt={alt}
           loading="lazy"
           decoding="async"
-          onLoad={() => setState("ok")}
-          onError={() => setState("error")}
+          onLoad={() => {
+            setSkeleton(false);
+            setShown(true);
+          }}
+          onError={() => setError(true)}
           sx={{
             position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: fit, display: "block",
-            opacity: state === "ok" ? 1 : 0, transition: state === "ok" ? "opacity .2s ease" : "none",
+            opacity: shown ? 1 : 0, transition: "opacity .3s ease",
           }}
         />
       )}
