@@ -7,7 +7,7 @@ import { useSWRConfig } from "swr";
 import { del, photoUrl, useApi } from "../lib/api";
 import type { Catch, DayDetail, Trip, WeatherHour } from "../lib/types";
 import { hm, kn, fmt1 } from "../lib/format";
-import { TIDE_LABEL, dirName, hourFloor, moonAt, tideState } from "../../shared/conditions";
+import { TIDE_LABEL, dirName, hourFloor, moonAt, tideFromEvents, tideState, type TideEvent } from "../../shared/conditions";
 import { SpeciesIcon, SPECIES_LABEL } from "./icons";
 import CatchCount from "./CatchCount";
 import TripDialog from "./TripDialog";
@@ -15,12 +15,19 @@ import CatchDialog from "./CatchDialog";
 import Arrow from "./Arrow";
 import { useConfirm } from "./useConfirm";
 
-function conditionsAt(t: number, weather: WeatherHour[]) {
+/** 潮汐：有氣象署的滿／乾潮時間就用它判斷（精確到分鐘），沒有才用模型的海面高度 */
+function tideAt(t: number, weather: WeatherHour[], events: TideEvent[]) {
+  const fromCwa = tideFromEvents(t, events);
+  if (fromCwa) return fromCwa;
   const h = hourFloor(t);
   const byTime = new Map(weather.map((w) => [w.time, w]));
-  const w = byTime.get(h);
+  return tideState(byTime.get(h - 3600)?.sea_level_m, byTime.get(h)?.sea_level_m, byTime.get(h + 3600)?.sea_level_m);
+}
+
+function conditionsAt(t: number, weather: WeatherHour[], events: TideEvent[]) {
+  const w = weather.find((x) => x.time === hourFloor(t));
   if (!w) return null;
-  return { ...w, tide: tideState(byTime.get(h - 3600)?.sea_level_m, w.sea_level_m, byTime.get(h + 3600)?.sea_level_m) };
+  return { ...w, tide: tideAt(t, weather, events) };
 }
 
 const avg = (xs: (number | null)[]) => {
@@ -33,7 +40,13 @@ function TripConditions({ trip }: { trip: Trip }) {
   const inTrip = trip.weather.filter((w) => w.time >= hourFloor(trip.start_at) && w.time < trip.end_at);
   if (inTrip.length === 0) return <Typography variant="caption" color="text.secondary">還沒有這段時間的天氣資料</Typography>;
   const mid = trip.weather.find((w) => w.time === hourFloor((trip.start_at + trip.end_at) / 2)) ?? inTrip[0];
-  const tides = [...new Set(inTrip.map((w) => conditionsAt(w.time, trip.weather)?.tide).filter(Boolean))].map((t) => TIDE_LABEL[t!]);
+  // 出釣期間每 15 分鐘看一次潮汐，依序列出變化，例如「漲潮→滿潮→退潮」
+  const tideSeq: string[] = [];
+  for (let t = trip.start_at; t <= trip.end_at; t += 900) {
+    const s = tideAt(t, trip.weather, trip.tide_events ?? []);
+    if (s && tideSeq[tideSeq.length - 1] !== TIDE_LABEL[s]) tideSeq.push(TIDE_LABEL[s]);
+  }
+  const tides = tideSeq;
   const moon = moonAt((trip.start_at + trip.end_at) / 2);
   const items = [
     { label: "風", value: `${dirName(mid.wind_dir)} ${kn(avg(inTrip.map((w) => w.wind_ms)))}kn`, extra: <Arrow deg={mid.wind_dir} size={14} /> },
@@ -61,7 +74,7 @@ function TripConditions({ trip }: { trip: Trip }) {
 }
 
 function CatchRow({ c, trip, onClick }: { c: Catch; trip: Trip; onClick: () => void }) {
-  const w = conditionsAt(c.caught_at, trip.weather);
+  const w = conditionsAt(c.caught_at, trip.weather, trip.tide_events ?? []);
   return (
     <Box onClick={onClick} sx={{ display: "flex", gap: 1.5, alignItems: "center", py: 1, cursor: "pointer" }}>
       <SpeciesIcon species={c.species} sx={{ fontSize: 36 }} />

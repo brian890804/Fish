@@ -70,6 +70,8 @@ export interface Trip {
   note: string | null;
   catches: Catch[];
   weather: WeatherHour[];
+  /** 氣象署的滿／乾潮時間 */
+  tide_events?: { time: number; type: "high" | "low"; height_cm?: number | null }[];
 }
 
 export interface DayDetail {

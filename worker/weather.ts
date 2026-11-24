@@ -10,6 +10,8 @@ export interface Spot {
   wg_spot_id: number | null;
   /** 共用哪個釣點的天氣；NULL 表示自己抓 */
   weather_spot_id: number | null;
+  /** 氣象署潮汐預報的地點名稱 */
+  cwa_tide_location?: string | null;
   sort_order: number;
 }
 

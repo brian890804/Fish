@@ -70,6 +70,36 @@ export function tideState(
   return diff >= 0 ? "rising" : "falling";
 }
 
+export interface TideEvent {
+  time: number;
+  type: "high" | "low";
+  height_cm?: number | null;
+}
+
+/** 滿潮／乾潮前後幾分鐘內算「平潮」 */
+export const SLACK_MINUTES = 40;
+
+/**
+ * 用氣象署的滿潮／乾潮時間判斷某個時間點的潮汐狀態。
+ * events 要依時間排序；前後找不到事件（或間隔不合理）時回傳 null，呼叫端改用模型備援。
+ */
+export function tideFromEvents(t: number, events: TideEvent[]): TideState | null {
+  let prev: TideEvent | undefined;
+  let next: TideEvent | undefined;
+  for (const e of events) {
+    if (e.time <= t) prev = e;
+    else {
+      next = e;
+      break;
+    }
+  }
+  if (!prev || !next || next.time - prev.time > 9 * 3600) return null;
+  const slack = SLACK_MINUTES * 60;
+  if (t - prev.time <= slack) return prev.type;
+  if (next.time - t <= slack) return next.type;
+  return prev.type === "low" ? "rising" : "falling";
+}
+
 const DIRS = ["北", "東北", "東", "東南", "南", "西南", "西", "西北"];
 export function dirName(deg: number | null | undefined): string {
   if (deg == null) return "-";

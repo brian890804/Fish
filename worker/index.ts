@@ -1,11 +1,14 @@
 import { hourFloor, twDate, twDayStart } from "../shared/conditions";
 import { analyze, forecast, type Species } from "./analysis";
 import { ensureWeather, refreshSpot, type Spot } from "./weather";
+import { loadTideEvents, refreshTide } from "./tide";
 import { MAX_PHOTO_BYTES, deletePhotos, getPhoto, putPhoto } from "./photos";
 
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  /** 中央氣象署開放資料金鑰（wrangler secret put CWA_API_KEY），沒設定時潮汐用模型 */
+  CWA_API_KEY?: string;
 }
 
 class HttpError extends Error {
@@ -91,12 +94,15 @@ async function dayDetail(env: Env, date: string) {
   const { results: weather } = await env.DB.prepare(
     "SELECT * FROM weather_hourly WHERE time BETWEEN ? AND ? ORDER BY time",
   ).bind(hourFloor(minT), maxT).all<any>();
+  const tideMap = await loadTideEvents(env.DB, [...new Set(trips.map((t) => t.weather_spot_id as number))], minT, maxT);
   return {
     date,
     trips: trips.map((t) => ({
       ...t,
       catches: catches.filter((c) => c.trip_id === t.id),
       weather: weather.filter((w) => w.spot_id === t.weather_spot_id && w.time >= hourFloor(t.start_at) - 3600 && w.time <= t.end_at + 3600),
+      // 氣象署的滿／乾潮時間；前端用它判斷每筆釣獲當下的漲退潮
+      tide_events: tideMap.get(t.weather_spot_id) ?? [],
     })),
   };
 }
@@ -301,7 +307,9 @@ async function refreshAll(env: Env) {
   const out = [];
   for (const spot of results) {
     try {
-      out.push(await refreshSpot(env.DB, spot));
+      const weather = await refreshSpot(env.DB, spot);
+      const tide = await refreshTide(env.DB, env.CWA_API_KEY, spot).catch((e) => ({ tide: `失敗：${e}` }));
+      out.push({ ...weather, ...tide });
     } catch (e) {
       out.push({ spot: spot.name, rows: 0, windguru: false, error: String(e) });
     }

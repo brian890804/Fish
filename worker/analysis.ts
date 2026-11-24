@@ -7,9 +7,12 @@ import {
   ratioToScore,
   scoreHour,
   tideState,
+  tideFromEvents,
+  type TideEvent,
   type FactorStat,
   type HourConditions,
 } from "../shared/conditions";
+import { loadTideEvents } from "./tide";
 
 export type Species = "squid" | "fish" | "all";
 
@@ -26,7 +29,11 @@ interface WRow {
   sea_level_m: number | null;
 }
 
-export function conditionsFor(time: number, byTime: Map<number, WRow>): HourConditions | null {
+/**
+ * 某個小時的條件。潮汐優先用氣象署的滿／乾潮時間（以該小時的中點判斷），
+ * 沒有氣象署資料時才用模型的海面高度。
+ */
+export function conditionsFor(time: number, byTime: Map<number, WRow>, tides: TideEvent[] = []): HourConditions | null {
   const w = byTime.get(time);
   if (!w) return null;
   return {
@@ -39,7 +46,9 @@ export function conditionsFor(time: number, byTime: Map<number, WRow>): HourCond
     wave_m: w.wave_m,
     swell_m: w.swell_m,
     sea_temp_c: w.sea_temp_c,
-    tide: tideState(byTime.get(time - 3600)?.sea_level_m, w.sea_level_m, byTime.get(time + 3600)?.sea_level_m),
+    tide:
+      tideFromEvents(time + 1800, tides) ??
+      tideState(byTime.get(time - 3600)?.sea_level_m, w.sea_level_m, byTime.get(time + 3600)?.sea_level_m),
     moon: moonAt(time + 1800).illumination,
   };
 }
@@ -109,6 +118,7 @@ export async function analyze(
   const maxT = Math.max(...trips.map((t) => t.end_at)) + 7200;
   const wsids = [...new Set(trips.map((t) => t.wsid))];
   const weather = await weatherMap(db, wsids.length === 1 ? wsids[0] : null, minT, maxT);
+  const tideMap = await loadTideEvents(db, wsids, minT, maxT);
 
   // 每個條件分組累計：釣了幾小時、釣到幾隻
   const acc = new Map<string, Map<string, { hours: number; catches: number }>>();
@@ -127,7 +137,7 @@ export async function analyze(
       if (fished <= 0) continue;
       const n = tripCatches.filter((c) => hourFloor(c.caught_at) === h).length;
       totalHours += fished;
-      const cond = conditionsFor(h, byTime);
+      const cond = conditionsFor(h, byTime, tideMap.get(trip.wsid));
       if (!cond) {
         missing += fished;
         continue;
@@ -184,11 +194,12 @@ export async function analyze(
 /** 未來 N 天逐小時預報，附上月相、潮汐與依歷史資料算出的分數 */
 export async function forecast(db: D1Database, spotId: number, fromT: number, toT: number, history: AnalysisResult) {
   const weather = (await weatherMap(db, spotId, fromT - 3600, toT + 3600)).get(spotId) ?? new Map();
+  const tides = (await loadTideEvents(db, [spotId], fromT, toT)).get(spotId) ?? [];
   const hours = [];
   for (let t = fromT; t <= toT; t += 3600) {
     const w = weather.get(t) as (WRow & Record<string, unknown>) | undefined;
     if (!w) continue;
-    const cond = conditionsFor(t, weather)!;
+    const cond = conditionsFor(t, weather, tides)!;
     const moon = moonAt(t + 1800);
     hours.push({
       ...w,
