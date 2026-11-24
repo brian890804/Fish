@@ -27,6 +27,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet" />
     <style>
       html, body, #root { margin: 0; height: 100%; }
+      /* 關閉雙擊放大：App 內的點兩下不會把整個畫面放大 */
+      html, body, #root, * { touch-action: manipulation; }
       body { background: #0a0f16; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
     </style>
   </head>

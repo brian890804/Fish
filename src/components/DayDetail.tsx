@@ -23,6 +23,8 @@ import LazyImage from "./LazyImage";
 import SunMoonRow from "./SunMoonRow";
 import { shareCard } from "../lib/shareCard";
 import { waterLabel } from "../../shared/water";
+import { TEXT } from "../theme";
+import PlaceIcon from "@mui/icons-material/PlaceRounded";
 import ShareIcon from "@mui/icons-material/IosShareRounded";
 import PhotoViewer from "./PhotoViewer";
 
@@ -47,41 +49,59 @@ const avg = (xs: (number | null)[]) => {
 };
 
 /** 出釣期間的海況摘要 */
+/** 小圓環：中間數字，下方標籤，圓環填的比例代表大小 */
+function MiniRing({ value, unit, label, ratio, color }: { value: React.ReactNode; unit?: string; label: React.ReactNode; ratio: number; color: string }) {
+  const size = 58;
+  const stroke = 5;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const k = Math.min(1, Math.max(0, ratio));
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+      <Box sx={{ position: "relative", width: size, height: size }}>
+        <svg width={size} height={size} style={{ transform: "rotate(-90deg)", display: "block" }}>
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(148,163,184,0.14)" strokeWidth={stroke} />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - k)} />
+        </svg>
+        <Box sx={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+          <Typography sx={{ fontSize: 14, fontWeight: 800 }}>{value}</Typography>
+          {unit && <Typography sx={{ fontSize: 9.5, color: TEXT.secondary, mt: 0.25 }}>{unit}</Typography>}
+        </Box>
+      </Box>
+      <Typography sx={{ fontSize: 11, color: TEXT.secondary, fontWeight: 600, lineHeight: 1, display: "flex", alignItems: "center", gap: 0.25 }}>{label}</Typography>
+    </Box>
+  );
+}
+
+/** 這趟的天氣與海況：一排小圓環，不寫長句 */
 function TripConditions({ trip }: { trip: Trip }) {
   const inTrip = trip.weather.filter((w) => w.time >= hourFloor(trip.start_at) && w.time < trip.end_at);
   if (inTrip.length === 0) return <Typography variant="caption" color="text.secondary">還沒有這段時間的天氣資料</Typography>;
   const mid = trip.weather.find((w) => w.time === hourFloor((trip.start_at + trip.end_at) / 2)) ?? inTrip[0];
-  // 出釣期間每 15 分鐘看一次潮汐，依序列出變化，例如「漲潮→滿潮→退潮」
   const tideSeq: string[] = [];
   for (let t = trip.start_at; t <= trip.end_at; t += 900) {
-    const s = tideAt(t, trip.weather, trip.tide_events ?? []);
-    if (s && tideSeq[tideSeq.length - 1] !== TIDE_LABEL[s]) tideSeq.push(TIDE_LABEL[s]);
+    const st = tideAt(t, trip.weather, trip.tide_events ?? []);
+    if (st && tideSeq[tideSeq.length - 1] !== TIDE_LABEL[st]) tideSeq.push(TIDE_LABEL[st]);
   }
-  const tides = tideSeq;
   const moon = moonAt((trip.start_at + trip.end_at) / 2);
   const windDir = meanDirection(inTrip.map((w) => w.wind_dir));
-  const items = [
-    // 風向取出釣期間的平均方向（用向量平均），附上角度
-    { label: "風", value: `${dirName16(windDir)} ${windDir ?? "-"}° · ${kn(avg(inTrip.map((w) => w.wind_ms)))}kn`, extra: <Arrow deg={windDir} size={14} /> },
-    { label: "浪", value: `${fmt1(avg(inTrip.map((w) => w.wave_m)))}m · ${fmt1(mid.wave_period_s)}s` },
-    { label: "潮", value: tides.join("→") || "-" },
-    { label: "月", value: `${moon.emoji} ${Math.round(moon.illumination * 100)}%` },
-    { label: "氣溫", value: fmt1(avg(inTrip.map((w) => w.temp_c)), "°") },
-    { label: "海溫", value: fmt1(avg(inTrip.map((w) => w.sea_temp_c)), "°") },
-    { label: "雲", value: `${Math.round(avg(inTrip.map((w) => w.cloud_pct)) ?? 0)}%` },
-    { label: "雨", value: `${fmt1(inTrip.reduce((a, w) => a + (w.precip_mm ?? 0), 0))}mm` },
-  ];
+  const windKn = kn(avg(inTrip.map((w) => w.wind_ms)));
+  const wave = avg(inTrip.map((w) => w.wave_m));
+  const temp = avg(inTrip.map((w) => w.temp_c));
+  const sea = avg(inTrip.map((w) => w.sea_temp_c));
+  const cloud = avg(inTrip.map((w) => w.cloud_pct));
+  const rain = inTrip.reduce((a, w) => a + (w.precip_mm ?? 0), 0);
   return (
-    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0.75 }}>
-      {items.map((it) => (
-        <Box key={it.label} sx={{ bgcolor: "rgba(255,255,255,0.04)", borderRadius: 1.5, px: 0.75, py: 0.5 }}>
-          <Typography sx={{ fontSize: 10 }} color="text.secondary">{it.label}</Typography>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>{it.value}</Typography>
-            {it.extra}
-          </Box>
-        </Box>
-      ))}
+    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", rowGap: 1.25, columnGap: 0.5 }}>
+      <MiniRing value={windKn ?? "-"} unit="kn" ratio={(windKn ?? 0) / 30} color="#5cc8ff"
+        label={<Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>風 {dirName16(windDir)}<Arrow deg={windDir} size={11} /></Box>} />
+      <MiniRing value={fmt1(wave)} unit="m" ratio={(wave ?? 0) / 3} color="#818cf8" label={`浪 ${fmt1(mid.wave_period_s)}s`} />
+      <MiniRing value={fmt1(temp)} unit="°C" ratio={(temp ?? 0) / 35} color="#fb923c" label="氣溫" />
+      <MiniRing value={fmt1(sea)} unit="°C" ratio={((sea ?? 0) - 10) / 22} color="#2dd4bf" label="海溫" />
+      <MiniRing value={Math.round(cloud ?? 0)} unit="%" ratio={(cloud ?? 0) / 100} color="#94a3b8" label="雲" />
+      <MiniRing value={`${Math.round(moon.illumination * 100)}`} unit={moon.emoji} ratio={moon.illumination} color="#fde68a" label="月" />
+      <MiniRing value={tideSeq.length ? tideSeq.map((x) => x[0]).join("") : "-"} unit="潮" ratio={1} color="#22d3ee" label="潮" />
+      <MiniRing value={fmt1(rain)} unit="mm" ratio={rain / 10} color="#60a5fa" label="雨" />
     </Box>
   );
 }
@@ -227,23 +247,17 @@ export default function DayDetail({ date }: { date: string | null }) {
                             <Box component="span" sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", ml: 0.5 }}>（隔天）</Box>
                           )}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">{t.spot_name} · {((t.end_at - t.start_at) / 3600).toFixed(1)} 小時</Typography>
+
                       </Box>
                       <IconButton size="small" onClick={() => setTripDialog({ open: true, trip: t })}><EditIcon fontSize="small" /></IconButton>
                       <IconButton size="small" onClick={() => removeTrip(t)}><DeleteIcon fontSize="small" /></IconButton>
                     </Box>
-                    <Box sx={{ display: "flex", gap: 2, alignItems: "center", mb: 1.5 }}>
-                      {squid + fish === 0 ? (
-                        <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
-                          <TurtleIcon titleAccess="槓龜" sx={{ fontSize: 40 }} />
-                          <Typography sx={{ fontWeight: 800, color: "text.secondary" }}>槓龜</Typography>
-                        </Box>
-                      ) : (
-                        <>
-                          {squid > 0 && <CatchCount species="squid" count={squid} size={40} />}
-                          {fish > 0 && <CatchCount species="fish" count={fish} size={40} />}
-                        </>
-                      )}
+                    <Box sx={{ display: "flex", gap: 0.75, alignItems: "center", flexWrap: "wrap", mb: 1.5 }}>
+                      <Chip size="small" icon={<PlaceIcon sx={{ fontSize: "16px !important" }} />} label={t.spot_name} sx={{ fontWeight: 700 }} />
+                      <Chip size="small" label={`${((t.end_at - t.start_at) / 3600).toFixed(1)} 小時`} sx={{ fontWeight: 700 }} />
+                      {squid > 0 && <Chip size="small" icon={<SpeciesIcon species="squid" sx={{ fontSize: 16 }} />} label={`×${squid}`} sx={{ fontWeight: 800 }} />}
+                      {fish > 0 && <Chip size="small" icon={<SpeciesIcon species="fish" sx={{ fontSize: 16 }} />} label={`×${fish}`} sx={{ fontWeight: 800 }} />}
+                      {squid + fish === 0 && <Chip size="small" icon={<TurtleIcon sx={{ fontSize: 18 }} />} label="槓龜" variant="outlined" />}
                     </Box>
                     <TripConditions trip={t} />
                     <Box sx={{ mt: 1.5 }}>
