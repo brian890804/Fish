@@ -2,8 +2,8 @@
 // 漸細的腕、色素斑點與虹彩亮點，周圍一團柔和的墨汁。
 // App 內的 SquidIcon 與 public/icon.svg（PWA icon）都用這支程式畫，外觀保持一致。
 //
-// 座標系：64 × 64。身體沿著一條微微 S 形的脊線（尾在上、頭在下），
-// 看起來像正在擺動；最後整體旋轉成往右上衝刺。
+// 座標系：64 × 64。身體是直的（尾在上、頭在下），鰭沿著胴體起伏；
+// 最後整體旋轉成往右上衝刺。
 
 type Pt = [number, number];
 
@@ -51,8 +51,8 @@ function taperedArm(p0: Pt, p1: Pt, p2: Pt, p3: Pt, w0: number, w1: number): str
 }
 
 // ---- 身體外形 ----
-/** 脊線：尾 → 頭，微微 S 形 */
-const SPINE: [Pt, Pt, Pt, Pt] = [[29.5, 5], [23.5, 17], [38.5, 30], [32, 43]];
+/** 脊線：尾 → 頭，直的 */
+const SPINE: [Pt, Pt, Pt, Pt] = [[32, 5], [32, 17.7], [32, 30.3], [32, 43]];
 const CX = 32;
 const HEAD_Y = 43;
 
@@ -145,21 +145,21 @@ export function squidMarkup(id: string, opts: { ink?: boolean } = {}): string {
     }
   }
 
-  // 八隻腕：往同一側甩、末端捲起，跟身體的 S 形連成一氣
+  // 八隻腕：左右對稱、往前收攏，末端微微向外彎
   const baseY = 49.5;
   const arms: { b: Pt; c1: Pt; c2: Pt; t: Pt; w: number }[] = [
-    { b: [29, baseY], c1: [25.5, 53.5], c2: [28.5, 58], t: [25.2, 61.8], w: 2.4 },
-    { b: [30.3, baseY], c1: [28, 55], c2: [31.5, 59], t: [28.8, 63.6], w: 2.5 },
-    { b: [31.4, baseY + 0.3], c1: [30.4, 55.5], c2: [33.5, 59.5], t: [31.6, 64.6], w: 2.5 },
-    { b: [32.6, baseY + 0.3], c1: [33, 55.5], c2: [35.6, 59], t: [34.4, 64.2], w: 2.5 },
-    { b: [33.7, baseY], c1: [35.6, 54.5], c2: [37.6, 58], t: [37.2, 62.8], w: 2.4 },
-    { b: [35, baseY], c1: [38, 53.5], c2: [40, 56.5], t: [40.3, 60.8], w: 2.3 },
+    { b: [29, baseY], c1: [27, 54], c2: [27.2, 58.5], t: [25.8, 62.2], w: 2.4 },
+    { b: [30.3, baseY], c1: [29.2, 55], c2: [29.4, 59.5], t: [28.7, 63.8], w: 2.5 },
+    { b: [31.4, baseY + 0.3], c1: [31, 55.5], c2: [31.2, 60], t: [31, 64.8], w: 2.5 },
+    { b: [32.6, baseY + 0.3], c1: [33, 55.5], c2: [32.8, 60], t: [33, 64.8], w: 2.5 },
+    { b: [33.7, baseY], c1: [34.8, 55], c2: [34.6, 59.5], t: [35.3, 63.8], w: 2.5 },
+    { b: [35, baseY], c1: [37, 54], c2: [36.8, 58.5], t: [38.2, 62.2], w: 2.4 },
   ];
   const armPaths = arms.map((a) => taperedArm(a.b, a.c1, a.c2, a.t, a.w, 0.25));
   // 兩條長觸腕，末端是觸腕穗
   const tentacles = [
-    taperedArm([30.5, baseY], [26, 57], [30, 63], [24, 69.5], 1.3, 0.7),
-    taperedArm([33.5, baseY], [38, 56], [42, 61], [45.5, 66.5], 1.3, 0.7),
+    taperedArm([30.5, baseY], [27, 57], [25.5, 63], [23.5, 69.5], 1.3, 0.7),
+    taperedArm([33.5, baseY], [37, 57], [38.5, 63], [40.5, 69.5], 1.3, 0.7),
   ];
 
   const fin = pathFrom(outline(finHalf));
@@ -227,15 +227,15 @@ ${
     <!-- 觸腕與腕 -->
     <g fill="url(#${g("arm")})" stroke="#2b2140" stroke-width="0.45" stroke-linejoin="round">
       ${tentacles.map((d) => `<path d="${d}"/>`).join("")}
-      <ellipse cx="23.6" cy="70.2" rx="1.9" ry="1.15" transform="rotate(-55 23.6 70.2)"/>
-      <ellipse cx="46" cy="67.2" rx="1.9" ry="1.15" transform="rotate(48 46 67.2)"/>
+      <ellipse cx="23.2" cy="70.3" rx="1.9" ry="1.15" transform="rotate(-68 23.2 70.3)"/>
+      <ellipse cx="40.8" cy="70.3" rx="1.9" ry="1.15" transform="rotate(68 40.8 70.3)"/>
       ${armPaths.map((d) => `<path d="${d}"/>`).join("")}
     </g>
     <!-- 腕內側的吸盤點 -->
     <g fill="#efe6fb" opacity="0.55">
-      <circle cx="28.2" cy="53.4" r="0.32"/><circle cx="28.4" cy="56" r="0.28"/><circle cx="31" cy="54.4" r="0.3"/>
-      <circle cx="31.8" cy="57.4" r="0.26"/><circle cx="33.4" cy="54.4" r="0.3"/><circle cx="34.4" cy="57.2" r="0.26"/>
-      <circle cx="35.9" cy="53.4" r="0.32"/><circle cx="37" cy="55.6" r="0.28"/>
+      <circle cx="28.4" cy="53.4" r="0.32"/><circle cx="27.9" cy="56" r="0.28"/><circle cx="30.6" cy="54.4" r="0.3"/>
+      <circle cx="30.2" cy="57.4" r="0.26"/><circle cx="33.4" cy="54.4" r="0.3"/><circle cx="33.8" cy="57.4" r="0.26"/>
+      <circle cx="35.6" cy="53.4" r="0.32"/><circle cx="36.1" cy="56" r="0.28"/>
     </g>
   </g>
 
