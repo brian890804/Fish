@@ -34,8 +34,12 @@ export default function SharePreview({ card, onClose }: { card: CardPreview | nu
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose}>關閉</Button>
-        <Button onClick={() => downloadImage(card.blob, card.date)}>下載圖片</Button>
-        {canShare && <Button variant="contained" onClick={onShare}>分享</Button>}
+        {/* 手機（支援分享檔案）：用系統分享選單，裡面有「儲存影像」，不會開新視窗；電腦才直接下載 */}
+        {canShare ? (
+          <Button variant="contained" onClick={onShare}>儲存或分享</Button>
+        ) : (
+          <Button variant="contained" onClick={() => downloadImage(card.blob, card.date)}>下載圖片</Button>
+        )}
       </DialogActions>
     </Dialog>
   );
