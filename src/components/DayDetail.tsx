@@ -172,6 +172,12 @@ export default function DayDetail({ date }: { date: string | null }) {
       .filter((e) => e.time >= startAt - 3600 && e.time <= endAt + 3600)
       .sort((a, b) => a.time - b.time);
     const tideLine = evs.map((e) => `${e.type === "high" ? "滿" : "乾"} ${dayjs.unix(e.time).format("HH:mm")}`).join(" · ");
+    // 照片依胴長排序：最大隻放中間，其次放左邊、右邊，最多三張
+    const photos = cs
+      .filter((c) => c.photo_keys?.length || c.photo_key)
+      .sort((a, b) => (b.length_cm ?? -1) - (a.length_cm ?? -1))
+      .slice(0, 3)
+      .map((c) => ({ url: photoUrl((c.photo_keys?.length ? c.photo_keys[0] : c.photo_key)!), cm: c.length_cm }));
     shareCard({
       date,
       spotName: all[0].spot_name,
@@ -181,6 +187,7 @@ export default function DayDetail({ date }: { date: string | null }) {
       fish: cs.filter((c) => c.species === "fish").length,
       maxSquidCm: lens.length ? Math.max(...lens) : null,
       tideLine,
+      photos,
     }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
   };
 
