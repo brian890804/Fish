@@ -5,12 +5,30 @@ import { login, register } from "../lib/api";
 import { SquidIcon } from "./icons";
 import { TEXT } from "../theme";
 
+/**
+ * 從邀請連結進來：網址是 /signup（或 #invite=邀請碼）就直接到註冊，邀請碼自動填好。
+ * 邀請碼放在 #（fragment），不會送到伺服器；讀完就把網址清乾淨，避免留在瀏覽紀錄裡。
+ * 只在模組載入時讀一次，避免 StrictMode 重複執行時讀到已清掉的網址。
+ */
+function readSignupLink(): { register: boolean; invite: string } {
+  try {
+    const onSignup = /\/signup\/?$/.test(window.location.pathname);
+    const m = window.location.hash.match(/invite=([^&]+)/);
+    const invite = m ? decodeURIComponent(m[1]) : "";
+    if (onSignup || m) window.history.replaceState(null, "", onSignup ? "/signup" : "/");
+    return { register: onSignup || !!invite, invite };
+  } catch {
+    return { register: false, invite: "" };
+  }
+}
+const SIGNUP_LINK = readSignupLink();
+
 /** 登入頁：登入一次，之後這台裝置會記住（約 400 天）；沒有帳號的人可以用邀請碼註冊 */
 export default function LoginPage({ onLogin }: { onLogin: () => void }) {
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register">(SIGNUP_LINK.register ? "register" : "login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [invite, setInvite] = useState("");
+  const [invite, setInvite] = useState(SIGNUP_LINK.invite);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const registering = mode === "register";
