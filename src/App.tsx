@@ -34,13 +34,17 @@ export default function App() {
     return () => window.removeEventListener("fish:logout", onOut);
   }, []);
 
-  // 啟動完成（登入狀態確認好）就淡出開場畫面
+  // 啟動完成（登入狀態確認好）且開場畫面至少顯示過一小段，就淡出
   useEffect(() => {
     if (authed === null) return;
     const splash = document.getElementById("splash");
     if (!splash) return;
-    splash.style.opacity = "0";
-    const t = setTimeout(() => splash.remove(), 260);
+    const MIN_SHOW_MS = 800;
+    const wait = Math.max(0, MIN_SHOW_MS - performance.now());
+    const t = setTimeout(() => {
+      splash.style.opacity = "0";
+      setTimeout(() => splash.remove(), 320);
+    }, wait);
     return () => clearTimeout(t);
   }, [authed]);
 

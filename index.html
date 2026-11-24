@@ -21,9 +21,12 @@
     </style>
   </head>
   <body>
-    <!-- 開場畫面：HTML 一載入就顯示，App 啟動完成後淡出移除 -->
-    <div id="splash" style="position:fixed;inset:0;background:#000;display:grid;place-items:center;z-index:9999;transition:opacity .25s ease">
-      <img src="/icon-192.png" width="96" height="96" alt="" style="border-radius:22px" />
+    <!-- 開場畫面：每次打開都顯示。全黑背景＋APP 圖示呼吸燈，App 準備好後淡出 -->
+    <style>
+      @keyframes fish-breathe { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+    </style>
+    <div id="splash" style="position:fixed;inset:0;background:#000;display:grid;place-items:center;z-index:9999;transition:opacity .3s ease">
+      <img src="/icon-192.png" width="96" height="96" alt="" style="border-radius:22px;animation:fish-breathe 1.6s ease-in-out infinite" />
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
