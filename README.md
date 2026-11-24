@@ -228,6 +228,7 @@ src/
   components/      共用元件：圓環儀表、預報表、月曆、單日紀錄、對話框、物種圖示…
   hooks/           共用資料邏輯：useToday、useCalendar、useAnalysis、useSpots
   lib/             API、格式化、型別、建議區間（advice.ts）
+  components/squidArt.ts  寫實風軟絲的繪圖程式，App 內圖示與主畫面 icon 共用
 worker/
   index.ts         API 路由與排程進入點
   weather.ts       溫古魯／Open-Meteo 抓取與寫入（含陣風修正）
@@ -237,6 +238,8 @@ worker/
 shared/
   conditions.ts    前後端共用：時間、月相、潮汐判斷、分析分組、評分
 migrations/        D1 schema
+scripts/
+  build-icon.ts    產生 public/icon.svg（npx tsx scripts/build-icon.ts），再轉成 icon-192／512、apple-touch-icon PNG
 ```
 
 ---
