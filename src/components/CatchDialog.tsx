@@ -10,6 +10,7 @@ import { del, photoUrl, post, put, uploadPhoto } from "../lib/api";
 import type { Catch, Species, Trip } from "../lib/types";
 import { SpeciesIcon } from "./icons";
 import EgiColorPicker from "./EgiColorPicker";
+import PhotoViewer from "./PhotoViewer";
 import { useConfirm } from "./useConfirm";
 
 interface Props {
@@ -34,6 +35,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploadingCount, setUploadingCount] = useState(0);
+  const [viewer, setViewer] = useState<{ keys: string[]; start: number } | null>(null);
   const [egiColor, setEgiColor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -186,7 +188,11 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
               {photos.map((k, i) => (
                 <Box key={k} sx={{ position: "relative", aspectRatio: "1", borderRadius: 2, overflow: "hidden", bgcolor: "rgba(148,163,184,0.1)" }}>
-                  <Box component="img" src={photoUrl(k)} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  <Box
+                    component="img" src={photoUrl(k, "thumb")} alt={`第 ${i + 1} 張照片`} role="button"
+                    onClick={() => setViewer({ keys: photos, start: i })}
+                    sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "zoom-in" }}
+                  />
                   {i === 0 && (
                     <Box sx={{ position: "absolute", left: 6, bottom: 6, fontSize: 10.5, fontWeight: 800, px: 0.75, py: 0.1, borderRadius: 1, bgcolor: "rgba(0,0,0,0.6)", color: "#fff" }}>封面</Box>
                   )}
@@ -220,6 +226,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       </DialogActions>
     </Dialog>
     {confirmDialog}
+    <PhotoViewer keys={viewer?.keys ?? null} start={viewer?.start ?? 0} onClose={() => setViewer(null)} />
     </>
   );
 }

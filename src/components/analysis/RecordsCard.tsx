@@ -38,7 +38,7 @@ export default function RecordsCard() {
                   {i < 3 ? <EmojiEventsIcon sx={{ color: MEDAL[i], fontSize: 24 }} /> : <Typography sx={{ fontWeight: 800, color: TEXT.secondary }}>{i + 1}</Typography>}
                 </Box>
                 {c.photo_key ? (
-                  <Box component="img" src={photoUrl(c.photo_key)} alt="" sx={{ width: 44, height: 44, borderRadius: 1.5, objectFit: "cover", flexShrink: 0 }} />
+                  <Box component="img" src={photoUrl(c.photo_key, "thumb")} loading="lazy" alt="" sx={{ width: 44, height: 44, borderRadius: 1.5, objectFit: "cover", flexShrink: 0 }} />
                 ) : (
                   <Box sx={{ width: 44, height: 44, display: "grid", placeItems: "center", flexShrink: 0 }}><SquidIcon sx={{ fontSize: 36 }} /></Box>
                 )}

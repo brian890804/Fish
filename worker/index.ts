@@ -5,7 +5,7 @@ import { loadTideEvents, refreshTide } from "./tide";
 import { isEgiColor } from "../shared/egi";
 import { PUSH_HOUR, describe, goodWindows, sendToAll } from "./push";
 import { twHour } from "../shared/conditions";
-import { MAX_PHOTO_BYTES, deletePhotos, getPhoto, putPhoto } from "./photos";
+import { MAX_PHOTO_BYTES, MAX_THUMB_BYTES, deletePhotos, getPhoto, putPhoto, putThumb } from "./photos";
 
 export interface Env {
   DB: D1Database;
@@ -152,14 +152,27 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
 
   // 照片用不可猜的 key 當檔名
   if (method === "GET" && seg[0] === "photos" && seg[1]) {
-    const photo = await getPhoto(env.DB, seg[1]);
+    const photo = await getPhoto(env.DB, seg[1], url.searchParams.get("s") === "thumb");
     if (!photo) return new Response("not found", { status: 404 });
     return new Response(photo.bytes, {
       headers: {
         "content-type": photo.contentType,
-        "cache-control": "public, max-age=31536000, immutable",
+        // 舊照片還沒有縮圖時回原圖，只快取一天，之後補了縮圖就會換成小圖
+        "cache-control": url.searchParams.get("s") === "thumb" && !photo.isThumb ? "public, max-age=86400" : "public, max-age=31536000, immutable",
       },
     });
+  }
+  // 還沒有縮圖的舊照片（前端會在背景補產生）
+  if (method === "GET" && path === "/photos-missing-thumbs") {
+    const { results } = await env.DB.prepare("SELECT key FROM photos WHERE thumb IS NULL LIMIT 30").all<{ key: string }>();
+    return json(results.map((r) => r.key));
+  }
+  // 上傳縮圖：照片上傳後，前端另外送一張小圖
+  if (method === "POST" && seg[0] === "photos" && seg[1] && seg[2] === "thumb") {
+    const data = await req.arrayBuffer();
+    if (data.byteLength === 0 || data.byteLength > MAX_THUMB_BYTES) throw new HttpError(400, "縮圖大小不正確");
+    if (!(await putThumb(env.DB, seg[1], data))) throw new HttpError(404, "找不到照片");
+    return json({ ok: true });
   }
 
   // ---- 釣點 ----

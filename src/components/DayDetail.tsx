@@ -106,7 +106,7 @@ function CatchRow({ c, trip, onClick, onPhotos }: { c: Catch; trip: Trip; onClic
           onClick={(e) => { e.stopPropagation(); onPhotos(photos); }}
           sx={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}
         >
-          <Box component="img" src={photoUrl(photos[0])} alt="" sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: "cover", display: "block" }} />
+          <Box component="img" src={photoUrl(photos[0], "thumb")} loading="lazy" alt="" sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: "cover", display: "block" }} />
           {photos.length > 1 && (
             <Box sx={{ position: "absolute", right: 3, bottom: 3, fontSize: 11, fontWeight: 800, px: 0.6, borderRadius: 1, bgcolor: "rgba(0,0,0,0.65)", color: "#fff", lineHeight: 1.5 }}>
               +{photos.length - 1}

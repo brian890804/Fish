@@ -165,7 +165,7 @@ Cloudflare Worker「fishing」 ── 提供前端靜態檔（dist/）
 | 前端 | React 19 + MUI 9 + SWR，Vite 打包；900px 以上用電腦版（`src/pc/`），以下用手機版（`src/mobile/`） |
 | 後端 | Cloudflare Worker（`worker/`），同一個 Worker 也提供前端靜態檔 |
 | 資料庫 | Cloudflare D1（SQLite），schema 在 `migrations/` |
-| 照片 | 存在 D1 的 `photos` 表（不用 R2，免綁卡）。上傳前在手機端縮到 1600px，太大會再降解析度，單張上限約 1.5 MB |
+| 照片 | 存在 D1 的 `photos` 表（不用 R2，免綁卡）。上傳前在手機端縮到 1600px（單張上限約 1.5 MB），另外存一張約 360px 的**縮圖**（約 10–30 KB）；清單、表單、排行榜用縮圖，點開放大才載入原圖。舊照片沒有縮圖時，App 打開會在背景自動補 |
 | 共用邏輯 | `shared/conditions.ts`：時間換算、月相、潮汐判斷、分析分組、評分，前後端共用 |
 
 ---
@@ -192,6 +192,7 @@ Migration 依序是：
 5. `0005_egi_color.sql`：釣獲的木蝦顏色
 6. `0006_push.sql`：好時段推播
 7. `0007_catch_photos.sql`：一筆釣獲多張照片（`photo_keys`，舊資料自動搬過去）
+8. `0008_photo_thumbs.sql`：照片縮圖
 
 ---
 

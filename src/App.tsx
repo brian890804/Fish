@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { backfillThumbs } from "./lib/api";
 import { CssBaseline, ThemeProvider, useMediaQuery } from "@mui/material";
 import { SWRConfig } from "swr";
 import { theme } from "./theme";
@@ -12,6 +13,12 @@ export default function App() {
   const [tab, setTab] = useState<AppTab>("home");
   // 900px 以上用電腦版
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"), { noSsr: true });
+
+  // 背景幫舊照片補縮圖（延遲幾秒，不搶首頁載入）
+  useEffect(() => {
+    const t = setTimeout(backfillThumbs, 4000);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <ThemeProvider theme={theme}>

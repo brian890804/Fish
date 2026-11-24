@@ -43,10 +43,12 @@ export async function uploadPhoto(file: File): Promise<string> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, data.error ?? "上傳失敗");
+  // 另外送一張小縮圖（清單、表單用），失敗也沒關係，會退回原圖
+  await uploadThumb(data.key, file).catch(() => undefined);
   return data.key;
 }
 
-async function resizeImage(file: File, maxSide: number, quality: number): Promise<Blob> {
+async function resizeImage(file: Blob, maxSide: number, quality: number): Promise<Blob> {
   try {
     const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
     const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
@@ -62,4 +64,27 @@ async function resizeImage(file: File, maxSide: number, quality: number): Promis
   }
 }
 
-export const photoUrl = (key: string) => `/api/photos/${key}`;
+/** size = "thumb" 用縮圖（清單、表單）；不填是原圖（放大看） */
+export const photoUrl = (key: string, size?: "thumb") => `/api/photos/${key}${size === "thumb" ? "?s=thumb" : ""}`;
+
+const THUMB_SIDE = 360;
+
+async function uploadThumb(key: string, source: Blob) {
+  const thumb = await resizeImage(source, THUMB_SIDE, 0.72);
+  if (thumb === source) return; // 瀏覽器不支援縮圖就算了
+  const res = await fetch(`/api/photos/${key}/thumb`, { method: "POST", headers: { "content-type": "image/jpeg" }, body: thumb });
+  if (!res.ok) throw new Error("縮圖上傳失敗");
+}
+
+/** 舊照片沒有縮圖：在背景下載原圖、縮小後補上（每次開 App 做一次，一次最多 30 張） */
+export async function backfillThumbs() {
+  try {
+    const keys = await api<string[]>("/photos-missing-thumbs");
+    for (const key of keys) {
+      const res = await fetch(photoUrl(key));
+      if (res.ok) await uploadThumb(key, await res.blob()).catch(() => undefined);
+    }
+  } catch {
+    /* 背景工作，失敗就下次再試 */
+  }
+}
