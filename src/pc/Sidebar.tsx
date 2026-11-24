@@ -1,4 +1,4 @@
-import { Box, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from "@mui/material";
+import { Box, Button, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from "@mui/material";
 import DashboardIcon from "@mui/icons-material/SpaceDashboardRounded";
 import CalendarIcon from "@mui/icons-material/CalendarMonthRounded";
 import InsightsIcon from "@mui/icons-material/InsightsRounded";
@@ -7,6 +7,7 @@ import RefreshIcon from "@mui/icons-material/RefreshRounded";
 import PlaceIcon from "@mui/icons-material/PlaceRounded";
 import dayjs from "dayjs";
 import { useToday } from "../hooks/useToday";
+import { logout } from "../lib/api";
 import { SquidIcon } from "../components/icons";
 import { spinSx } from "../lib/sx";
 import type { AppTab } from "../App";
@@ -79,6 +80,7 @@ export default function Sidebar({ tab, onChange }: { tab: AppTab; onChange: (t: 
         </Typography>
         {t.sourceLabel && <Typography variant="caption" color="text.secondary">資料來源：{t.sourceLabel}</Typography>}
       </Box>
+      <Button size="small" color="inherit" onClick={() => logout()} sx={{ mt: 1.5, color: "text.secondary", justifyContent: "flex-start" }}>登出</Button>
     </Box>
   );
 }

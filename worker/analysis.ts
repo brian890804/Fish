@@ -91,16 +91,17 @@ export interface AnalysisResult {
 export async function analyze(
   db: D1Database,
   // spotId：只看某個釣點；weatherSpotId：看共用同一個天氣來源的所有釣點（評分用）
-  opts: { from: string; to: string; spotId: number | null; species: Species; weatherSpotId?: number | null },
+  opts: { userId: number; from: string; to: string; spotId: number | null; species: Species; weatherSpotId?: number | null },
 ): Promise<AnalysisResult> {
   // 每趟出釣都帶上它實際使用的天氣來源（附近釣點共用水湳洞漁港的天氣）
+  // 只看這個帳號的出釣（魚貨是個人的，天氣是共用的）
   const base = `SELECT t.*, COALESCE(s.weather_spot_id, s.id) AS wsid FROM trips t JOIN spots s ON s.id = t.spot_id
-                 WHERE t.date BETWEEN ? AND ?`;
+                 WHERE t.user_id = ? AND t.date BETWEEN ? AND ?`;
   const tripsQ = opts.spotId
-    ? db.prepare(`${base} AND t.spot_id = ?`).bind(opts.from, opts.to, opts.spotId)
+    ? db.prepare(`${base} AND t.spot_id = ?`).bind(opts.userId, opts.from, opts.to, opts.spotId)
     : opts.weatherSpotId
-      ? db.prepare(`${base} AND COALESCE(s.weather_spot_id, s.id) = ?`).bind(opts.from, opts.to, opts.weatherSpotId)
-      : db.prepare(base).bind(opts.from, opts.to);
+      ? db.prepare(`${base} AND COALESCE(s.weather_spot_id, s.id) = ?`).bind(opts.userId, opts.from, opts.to, opts.weatherSpotId)
+      : db.prepare(base).bind(opts.userId, opts.from, opts.to);
   const { results: trips } = await tripsQ.all<{ id: number; spot_id: number; wsid: number; start_at: number; end_at: number }>();
 
   const empty: AnalysisResult = {
@@ -127,7 +128,9 @@ export async function analyze(
   const acc = new Map<string, Map<string, { hours: number; catches: number }>>();
   for (const f of FACTORS) acc.set(f.key, new Map(f.buckets.map((b) => [b, { hours: 0, catches: 0 }])));
 
-  let totalHours = 0;
+  // 每小時釣獲率只用「有天氣資料」的小時來算，分子分母才一致
+  let weatherHours = 0;
+  let weatherCatches = 0;
   let missing = 0;
   let blankTrips = 0;
   for (const trip of trips) {
@@ -139,12 +142,13 @@ export async function analyze(
       const fished = (Math.min(trip.end_at, h + 3600) - Math.max(trip.start_at, h)) / 3600;
       if (fished <= 0) continue;
       const n = tripCatches.filter((c) => hourFloor(c.caught_at) === h).length;
-      totalHours += fished;
       const cond = conditionsFor(h, byTime, tideMap.get(trip.wsid));
       if (!cond) {
         missing += fished;
         continue;
       }
+      weatherHours += fished;
+      weatherCatches += n;
       for (const f of FACTORS) {
         const b = f.bucketOf(cond);
         if (!b) continue;
@@ -158,7 +162,7 @@ export async function analyze(
   }
 
   const total = counted.length;
-  const rate = totalHours > 0 ? total / totalHours : 0;
+  const rate = weatherHours > 0 ? weatherCatches / weatherHours : 0;
   const factors: FactorStat[] = FACTORS.map((f) => ({
     key: f.key,
     label: f.label,
@@ -198,7 +202,7 @@ export async function analyze(
   return {
     ...opts,
     trips: trips.length,
-    hours: +totalHours.toFixed(1),
+    hours: +weatherHours.toFixed(1),
     catches: total,
     squid: catches.filter((c) => c.species === "squid").length,
     fish: catches.filter((c) => c.species === "fish").length,

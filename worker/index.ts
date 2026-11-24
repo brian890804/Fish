@@ -6,6 +6,8 @@ import { isEgiColor } from "../shared/egi";
 import { PUSH_HOUR, describe, goodWindows, sendToAll } from "./push";
 import { twHour } from "../shared/conditions";
 import { MAX_PHOTO_BYTES, MAX_THUMB_BYTES, deletePhotos, getPhoto, putPhoto, putThumb } from "./photos";
+import { bumpVersion, cached } from "./cache";
+import { OWNER_ID, SESSION_COOKIE, checkCredentials, makeSession, readCookie, sessionCookie, verifySession } from "./auth";
 
 export interface Env {
   DB: D1Database;
@@ -15,7 +17,12 @@ export interface Env {
   /** Web Push 金鑰（node scripts/setup-push.mjs 產生並存成 secret） */
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
+  /** 登入帳號密碼與 cookie 簽章金鑰（node scripts/setup-login.mjs 設定） */
+  APP_USERNAME?: string;
+  APP_PASSWORD?: string;
+  AUTH_SECRET?: string;
 }
+
 
 class HttpError extends Error {
   constructor(public status: number, message: string) {
@@ -66,6 +73,7 @@ interface CatchInput {
   /** 多張照片，第一張當封面 */
   photo_keys?: string[] | null;
   egi_color?: string | null;
+  water_color?: string | null;
 }
 
 function validateTrip(t: TripInput) {
@@ -79,9 +87,11 @@ function validateCatch(c: CatchInput) {
   if (!Number.isFinite(c.caught_at)) throw new HttpError(400, "缺少釣到的時間");
   if (c.species !== "squid" && c.species !== "fish") throw new HttpError(400, "種類只能是軟絲或魚");
   if (c.egi_color != null && !isEgiColor(c.egi_color)) throw new HttpError(400, "木蝦顏色不正確");
+  if (c.water_color != null && !WATER_COLORS.includes(c.water_color as (typeof WATER_COLORS)[number])) throw new HttpError(400, "水色不正確");
 }
 
 const MAX_PHOTOS = 6;
+const WATER_COLORS = ["clear", "light", "murky", "muddy"] as const;
 const PHOTO_KEY_RE = /^[0-9a-f-]{36}\.[a-z0-9]+$/;
 
 /** 從資料庫的一列取出所有照片 key（舊資料只有 photo_key） */
@@ -116,6 +126,36 @@ async function stretchTrip(env: Env, tripId: number, t: number) {
   ).bind(t, t + 60, tripId).run();
 }
 
+/** 出釣是不是這個帳號的 */
+async function tripOwned(db: D1Database, tripId: number): Promise<boolean> {
+  return !!(await db.prepare("SELECT 1 AS ok FROM trips WHERE id = ? AND user_id = ?").bind(tripId, OWNER_ID).first());
+}
+
+const hhmm = (t: number) => new Date((t + 8 * 3600) * 1000).toISOString().slice(11, 16);
+
+/** 同一個帳號的另一趟出釣，跟這段時間重疊就回傳它（exceptId 是要忽略的這一趟） */
+async function overlappingTrip(db: D1Database, start: number, end: number, exceptId: number | null) {
+  return db
+    .prepare("SELECT id, start_at, end_at FROM trips WHERE user_id = ? AND start_at < ? AND end_at > ? AND id IS NOT ? LIMIT 1")
+    .bind(OWNER_ID, end, start, exceptId)
+    .first<{ id: number; start_at: number; end_at: number }>();
+}
+
+const clashMessage = (c: { start_at: number; end_at: number }) =>
+  `這段時間跟另一趟出釣重疊（${hhmm(c.start_at)} – ${hhmm(c.end_at)}）。同一段時間只能記一趟，請調整時間。`;
+
+/** 釣獲時間在出釣外面時會把出釣撐開，撐開後也不能跟別趟重疊 */
+async function assertCanStretch(db: D1Database, tripId: number, caughtAt: number) {
+  const trip = await db.prepare("SELECT start_at, end_at FROM trips WHERE id = ? AND user_id = ?")
+    .bind(tripId, OWNER_ID).first<{ start_at: number; end_at: number }>();
+  if (!trip) throw new HttpError(404, "找不到出釣紀錄");
+  const start = Math.min(trip.start_at, caughtAt);
+  const end = Math.max(trip.end_at, caughtAt + 60);
+  if (end - start > 24 * 3600) throw new HttpError(400, "一趟出釣最長 24 小時，這個釣獲時間會讓出釣超過 24 小時，請檢查時間。");
+  const clash = await overlappingTrip(db, start, end, tripId);
+  if (clash) throw new HttpError(400, `這個釣獲時間會讓出釣跟另一趟重疊（${hhmm(clash.start_at)} – ${hhmm(clash.end_at)}）。`);
+}
+
 /** 一天的出釣、釣獲、以及每筆釣獲當下的天氣 */
 async function dayDetail(env: Env, date: string, overnight = false) {
   // overnight：也包含前一天開始、跨過這天午夜的出釣（首頁「今日釣獲」用，夜釣才看得到還在進行的那趟）
@@ -124,9 +164,9 @@ async function dayDetail(env: Env, date: string, overnight = false) {
     `SELECT t.*, s.name AS spot_name, COALESCE(s.weather_spot_id, s.id) AS weather_spot_id,
             CASE WHEN t.date <> ? THEN 1 ELSE 0 END AS overnight
        FROM trips t JOIN spots s ON s.id = t.spot_id
-      WHERE t.date = ? OR (? = 1 AND t.start_at >= ? AND t.start_at < ? AND t.end_at > ?)
+      WHERE t.user_id = ? AND (t.date = ? OR (? = 1 AND t.start_at >= ? AND t.start_at < ? AND t.end_at > ?))
       ORDER BY start_at`,
-  ).bind(date, date, overnight ? 1 : 0, dayStart - 86400, dayStart, dayStart).all<any>();
+  ).bind(date, OWNER_ID, date, overnight ? 1 : 0, dayStart - 86400, dayStart, dayStart).all<any>();
   if (trips.length === 0) return { date, trips: [] };
   const ids = trips.map((t) => t.id);
   const { results: catches } = await env.DB.prepare(
@@ -154,6 +194,27 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   const path = url.pathname.replace(/^\/api/, "");
   const method = req.method;
   const seg = path.split("/").filter(Boolean);
+
+  // ---- 登入（這三個不需要先登入） ----
+  if (path === "/login" && method === "POST") {
+    const { username = "", password = "" } = await body<{ username?: string; password?: string }>(req);
+    if (!checkCredentials(env, username, password)) throw new HttpError(401, "帳號或密碼不正確");
+    const res = json({ ok: true });
+    res.headers.append("set-cookie", sessionCookie(await makeSession(env), 400 * 86400));
+    return res;
+  }
+  if (path === "/logout" && method === "POST") {
+    const res = json({ ok: true });
+    res.headers.append("set-cookie", sessionCookie("", 0));
+    return res;
+  }
+  if (path === "/me" && method === "GET") {
+    if (!(await verifySession(env, readCookie(req, SESSION_COOKIE)))) throw new HttpError(401, "請先登入");
+    return json({ ok: true });
+  }
+
+  // ---- 其餘 API（含照片）都要登入 ----
+  if (!(await verifySession(env, readCookie(req, SESSION_COOKIE)))) throw new HttpError(401, "請先登入");
 
   // 照片用不可猜的 key 當檔名
   if (method === "GET" && seg[0] === "photos" && seg[1]) {
@@ -234,8 +295,8 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
               SUM(CASE WHEN c.species = 'squid' THEN 1 ELSE 0 END) AS squid,
               SUM(CASE WHEN c.species = 'fish' THEN 1 ELSE 0 END) AS fish
          FROM trips t LEFT JOIN catches c ON c.trip_id = t.id
-        WHERE t.date LIKE ? GROUP BY t.date`,
-    ).bind(`${month}-%`).all();
+        WHERE t.user_id = ? AND t.date LIKE ? GROUP BY t.date`,
+    ).bind(OWNER_ID, `${month}-%`).all();
     return json(results);
   }
 
@@ -250,9 +311,11 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const t = await body<TripInput>(req);
     validateTrip(t);
     const spot = await getSpot(env, t.spot_id);
+    const clash = await overlappingTrip(env.DB, t.start_at, t.end_at, null);
+    if (clash) throw new HttpError(400, clashMessage(clash));
     const r = await env.DB.prepare(
-      "INSERT INTO trips (spot_id, date, start_at, end_at, note) VALUES (?, ?, ?, ?, ?) RETURNING *",
-    ).bind(spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null).first();
+      "INSERT INTO trips (user_id, spot_id, date, start_at, end_at, note) VALUES (?, ?, ?, ?, ?, ?) RETURNING *",
+    ).bind(OWNER_ID, spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null).first();
     await ensureWeather(env.DB, await weatherSpotOf(env, spot), t.start_at, t.end_at).catch((e) => console.error("補抓天氣失敗", e));
     return json(r, 201);
   }
@@ -260,15 +323,18 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const t = await body<TripInput>(req);
     validateTrip(t);
     const spot = await getSpot(env, t.spot_id);
+    const clash = await overlappingTrip(env.DB, t.start_at, t.end_at, Number(seg[1]));
+    if (clash) throw new HttpError(400, clashMessage(clash));
     const r = await env.DB.prepare(
-      "UPDATE trips SET spot_id = ?, date = ?, start_at = ?, end_at = ?, note = ? WHERE id = ? RETURNING *",
-    ).bind(spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null, Number(seg[1])).first();
+      "UPDATE trips SET spot_id = ?, date = ?, start_at = ?, end_at = ?, note = ? WHERE id = ? AND user_id = ? RETURNING *",
+    ).bind(spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null, Number(seg[1]), OWNER_ID).first();
     if (!r) throw new HttpError(404, "找不到出釣紀錄");
     await ensureWeather(env.DB, await weatherSpotOf(env, spot), t.start_at, t.end_at).catch((e) => console.error("補抓天氣失敗", e));
     return json(r);
   }
   if (seg[0] === "trips" && seg[1] && method === "DELETE") {
     const id = Number(seg[1]);
+    if (!(await tripOwned(env.DB, id))) throw new HttpError(404, "找不到出釣紀錄");
     const { results } = await env.DB.prepare("SELECT photo_key, photo_keys FROM catches WHERE trip_id = ?")
       .bind(id).all<{ photo_key: string | null; photo_keys: string | null }>();
     const keys = results.flatMap(photoKeysOf);
@@ -285,11 +351,12 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const c = await body<CatchInput>(req);
     validateCatch(c);
     const keys = inputPhotoKeys(c);
+    await assertCanStretch(env.DB, c.trip_id, c.caught_at);
     const r = await env.DB.prepare(
-      `INSERT INTO catches (trip_id, caught_at, species, fish_name, length_cm, weight_g, note, photo_key, photo_keys, egi_color)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+      `INSERT INTO catches (trip_id, caught_at, species, fish_name, length_cm, weight_g, note, photo_key, photo_keys, egi_color, water_color)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
     ).bind(c.trip_id, c.caught_at, c.species, c.fish_name ?? null, c.length_cm ?? null, c.weight_g ?? null,
-      c.note ?? null, keys[0] ?? null, keys.length ? JSON.stringify(keys) : null, c.egi_color ?? null).first<any>();
+      c.note ?? null, keys[0] ?? null, keys.length ? JSON.stringify(keys) : null, c.egi_color ?? null, c.water_color ?? null).first<any>();
     await stretchTrip(env, c.trip_id, c.caught_at);
     return json(toCatch(r), 201);
   }
@@ -297,15 +364,17 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const c = await body<CatchInput>(req);
     validateCatch(c);
     const id = Number(seg[1]);
-    const old = await env.DB.prepare("SELECT photo_key, photo_keys FROM catches WHERE id = ?").bind(id)
-      .first<{ photo_key: string | null; photo_keys: string | null }>();
+    const old = await env.DB.prepare(
+      "SELECT c.photo_key, c.photo_keys FROM catches c JOIN trips t ON t.id = c.trip_id WHERE c.id = ? AND t.user_id = ?",
+    ).bind(id, OWNER_ID).first<{ photo_key: string | null; photo_keys: string | null }>();
     if (!old) throw new HttpError(404, "找不到釣獲");
+    await assertCanStretch(env.DB, c.trip_id, c.caught_at);
     const keys = inputPhotoKeys(c);
     const r = await env.DB.prepare(
-      `UPDATE catches SET caught_at = ?, species = ?, fish_name = ?, length_cm = ?, weight_g = ?, note = ?, photo_key = ?, photo_keys = ?, egi_color = ?
+      `UPDATE catches SET caught_at = ?, species = ?, fish_name = ?, length_cm = ?, weight_g = ?, note = ?, photo_key = ?, photo_keys = ?, egi_color = ?, water_color = ?
        WHERE id = ? RETURNING *`,
     ).bind(c.caught_at, c.species, c.fish_name ?? null, c.length_cm ?? null, c.weight_g ?? null, c.note ?? null,
-      keys[0] ?? null, keys.length ? JSON.stringify(keys) : null, c.egi_color ?? null, id).first<any>();
+      keys[0] ?? null, keys.length ? JSON.stringify(keys) : null, c.egi_color ?? null, c.water_color ?? null, id).first<any>();
     // 編輯時拿掉的照片，從資料庫刪掉
     const removed = photoKeysOf(old).filter((k) => !keys.includes(k));
     if (removed.length) ctx.waitUntil(deletePhotos(env.DB, removed));
@@ -313,7 +382,9 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     return json(toCatch(r));
   }
   if (seg[0] === "catches" && seg[1] && method === "DELETE") {
-    const r = await env.DB.prepare("DELETE FROM catches WHERE id = ? RETURNING photo_key, photo_keys").bind(Number(seg[1]))
+    const r = await env.DB.prepare(
+      "DELETE FROM catches WHERE id = ? AND trip_id IN (SELECT id FROM trips WHERE user_id = ?) RETURNING photo_key, photo_keys",
+    ).bind(Number(seg[1]), OWNER_ID)
       .first<{ photo_key: string | null; photo_keys: string | null }>();
     const keys = r ? photoKeysOf(r) : [];
     if (keys.length) ctx.waitUntil(deletePhotos(env.DB, keys));
@@ -341,7 +412,9 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const species = (url.searchParams.get("species") ?? "squid") as Species;
     const today = twDate(Date.now() / 1000);
     // 評分用所有共用這個天氣來源的釣點的紀錄
-    const history = await analyze(env.DB, { from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species });
+    const history = await cached(env.DB, `u${OWNER_ID}:history:${spot.id}:${species}`, () =>
+      analyze(env.DB, { userId: OWNER_ID, from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species }),
+    );
     const from = twDayStart(today);
     const hours = await forecast(env.DB, spot.id, from, from + days * 86400 - 3600, history);
     const last = await env.DB.prepare(
@@ -356,7 +429,9 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const to = url.searchParams.get("to") ?? "2999-12-31";
     const spotId = Number(url.searchParams.get("spot")) || null;
     const species = (url.searchParams.get("species") ?? "squid") as Species;
-    return json(await analyze(env.DB, { from, to, spotId, species }));
+    return json(await cached(env.DB, `u${OWNER_ID}:analysis:${from}:${to}:${spotId}:${species}`, () =>
+      analyze(env.DB, { userId: OWNER_ID, from, to, spotId, species }),
+    ));
   }
 
   // ---- 個人紀錄：最大隻排行、每月胴長趨勢 ----
@@ -365,9 +440,9 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const { results: top } = await env.DB.prepare(
       `SELECT c.id, c.caught_at, c.length_cm, c.weight_g, c.egi_color, c.photo_key, t.date, s.name AS spot_name
          FROM catches c JOIN trips t ON t.id = c.trip_id JOIN spots s ON s.id = t.spot_id
-        WHERE c.species = ? AND c.length_cm IS NOT NULL
+        WHERE t.user_id = ? AND c.species = ? AND c.length_cm IS NOT NULL
         ORDER BY c.length_cm DESC, c.caught_at LIMIT 5`,
-    ).bind(species).all();
+    ).bind(OWNER_ID, species).all();
     const { results: months } = await env.DB.prepare(
       `SELECT substr(t.date, 1, 7) AS month,
               COUNT(*) AS catches,
@@ -375,13 +450,13 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
               ROUND(AVG(c.length_cm), 1) AS avg_cm,
               MAX(c.length_cm) AS max_cm
          FROM catches c JOIN trips t ON t.id = c.trip_id
-        WHERE c.species = ?
+        WHERE t.user_id = ? AND c.species = ?
         GROUP BY month ORDER BY month`,
-    ).bind(species).all();
+    ).bind(OWNER_ID, species).all();
     // 每月出釣次數（含槓龜），用來看每次平均釣幾隻
     const { results: tripsByMonth } = await env.DB.prepare(
-      "SELECT substr(date, 1, 7) AS month, COUNT(*) AS trips FROM trips GROUP BY month",
-    ).all<{ month: string; trips: number }>();
+      "SELECT substr(date, 1, 7) AS month, COUNT(*) AS trips FROM trips WHERE user_id = ? GROUP BY month",
+    ).bind(OWNER_ID).all<{ month: string; trips: number }>();
     const tripMap = new Map(tripsByMonth.map((r) => [r.month, r.trips]));
     return json({
       species,
@@ -399,14 +474,14 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     if (!subscription?.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) throw new HttpError(400, "訂閱資料不完整");
     if (!/^https:\/\//.test(subscription.endpoint)) throw new HttpError(400, "訂閱網址不正確");
     await env.DB.prepare(
-      `INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES (?, ?, ?)
-       ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth`,
-    ).bind(subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth).run();
+      `INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_id) VALUES (?, ?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth, user_id = excluded.user_id`,
+    ).bind(subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, OWNER_ID).run();
     return json({ ok: true });
   }
   if (path === "/push/unsubscribe" && method === "POST") {
     const { endpoint } = await body<{ endpoint: string }>(req);
-    await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").bind(endpoint ?? "").run();
+    await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?").bind(endpoint ?? "", OWNER_ID).run();
     return json({ ok: true });
   }
   // 預覽：現在檢查的話，會通知什麼（不會真的送出）
@@ -428,7 +503,9 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
 async function planPush(env: Env) {
   const now = Math.floor(Date.now() / 1000);
   const spot = await weatherSpotOf(env, await getSpot(env, null));
-  const history = await analyze(env.DB, { from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species: "squid" });
+  const history = await cached(env.DB, `u${OWNER_ID}:history:${spot.id}:squid`, () =>
+    analyze(env.DB, { userId: OWNER_ID, from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species: "squid" }),
+  );
   const start = hourFloor(now) + 3600;
   const hours = await forecast(env.DB, spot.id, start, start + 24 * 3600, history);
   const windows = goodWindows(hours, start, start + 24 * 3600);
@@ -475,7 +552,10 @@ export default {
     const url = new URL(req.url);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
     try {
-      return await handleApi(req, env, url, ctx);
+      const res = await handleApi(req, env, url, ctx);
+      // 出釣、釣獲、釣點有寫入成功，就讓分析快取失效
+      if (req.method !== "GET" && res.ok && /^\/api\/(trips|catches|spots)/.test(url.pathname)) await bumpVersion(env.DB);
+      return res;
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message }, e.status);
       console.error(e);

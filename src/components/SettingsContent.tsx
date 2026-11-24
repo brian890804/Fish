@@ -5,7 +5,7 @@ import {
 import ExpandMoreIcon from "@mui/icons-material/ExpandMoreRounded";
 import MyLocationIcon from "@mui/icons-material/MyLocationRounded";
 import { getPosition, hasOwnLocation } from "../lib/geo";
-import { post, put } from "../lib/api";
+import { post, put, logout } from "../lib/api";
 import { useSpots } from "../hooks/useSpots";
 import type { Spot } from "../lib/types";
 import PushCard from "./PushCard";
@@ -149,6 +149,7 @@ export default function SettingsContent() {
           {refreshMsg && <Typography variant="body2" sx={{ whiteSpace: "pre-line" }}>{refreshMsg}</Typography>}
         </CardContent>
       </Card>
+      <Button color="error" variant="outlined" onClick={() => logout()} sx={{ alignSelf: "flex-start" }}>登出</Button>
     </Box>
   );
 }

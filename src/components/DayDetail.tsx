@@ -4,6 +4,7 @@ import EditIcon from "@mui/icons-material/EditRounded";
 import DeleteIcon from "@mui/icons-material/DeleteOutlineRounded";
 import AddIcon from "@mui/icons-material/AddRounded";
 import { useSWRConfig } from "swr";
+import { useSpots } from "../hooks/useSpots";
 import dayjs from "dayjs";
 import { del, photoUrl, useApi } from "../lib/api";
 import type { Catch, DayDetail, Trip, WeatherHour } from "../lib/types";
@@ -17,6 +18,12 @@ import CatchDialog from "./CatchDialog";
 import Arrow from "./Arrow";
 import { useConfirm } from "./useConfirm";
 import { EgiDot } from "./EgiColorPicker";
+import TideCurve from "./TideCurve";
+import LazyImage from "./LazyImage";
+import SunMoonRow from "./SunMoonRow";
+import { shareCard } from "../lib/shareCard";
+import { waterLabel } from "../../shared/water";
+import ShareIcon from "@mui/icons-material/IosShareRounded";
 import PhotoViewer from "./PhotoViewer";
 
 /** 潮汐：有氣象署的滿／乾潮時間就用它判斷（精確到分鐘），沒有才用模型的海面高度 */
@@ -93,6 +100,7 @@ function CatchRow({ c, trip, onClick, onPhotos }: { c: Catch; trip: Trip; onClic
             {c.weight_g != null && ` · ${c.weight_g}g`}
           </Typography>
           <EgiDot color={c.egi_color} size={11} />
+          {waterLabel(c.water_color) && <Typography variant="caption" color="text.secondary">水色 {waterLabel(c.water_color)}</Typography>}
         </Box>
         {w && (
           <Typography variant="caption" color="text.secondary">
@@ -108,7 +116,7 @@ function CatchRow({ c, trip, onClick, onPhotos }: { c: Catch; trip: Trip; onClic
           onClick={(e) => { e.stopPropagation(); onPhotos(photos); }}
           sx={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}
         >
-          <Box component="img" src={photoUrl(photos[0], "thumb")} loading="lazy" alt="" sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: "cover", display: "block" }} />
+          <LazyImage src={photoUrl(photos[0], "thumb")} sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: "cover", display: "block" }} />
           {photos.length > 1 && (
             <Box sx={{ position: "absolute", right: 3, bottom: 3, fontSize: 11, fontWeight: 800, px: 0.6, borderRadius: 1, bgcolor: "rgba(0,0,0,0.65)", color: "#fff", lineHeight: 1.5 }}>
               +{photos.length - 1}
@@ -129,6 +137,32 @@ export default function DayDetail({ date }: { date: string | null }) {
   const [catchDialog, setCatchDialog] = useState<{ open: boolean; trip: Trip | null; item?: Catch | null }>({ open: false, trip: null });
   const [confirmDialog, confirm] = useConfirm();
   const [viewing, setViewing] = useState<string[] | null>(null);
+  const spots = useSpots();
+
+  // 分享圖卡：把這一天所有出釣合成一張
+  const shareDay = () => {
+    const all = trips ?? [];
+    if (!all.length || !date) return;
+    const cs = all.flatMap((t) => t.catches);
+    const lens = cs.filter((c) => c.species === "squid" && c.length_cm != null).map((c) => c.length_cm!);
+    const startAt = Math.min(...all.map((t) => t.start_at));
+    const endAt = Math.max(...all.map((t) => t.end_at));
+    const evs = all
+      .flatMap((t) => t.tide_events ?? [])
+      .filter((e) => e.time >= startAt - 3600 && e.time <= endAt + 3600)
+      .sort((a, b) => a.time - b.time);
+    const tideLine = evs.map((e) => `${e.type === "high" ? "滿" : "乾"} ${dayjs.unix(e.time).format("HH:mm")}`).join(" · ");
+    shareCard({
+      date,
+      spotName: all[0].spot_name,
+      startAt,
+      endAt,
+      squid: cs.filter((c) => c.species === "squid").length,
+      fish: cs.filter((c) => c.species === "fish").length,
+      maxSquidCm: lens.length ? Math.max(...lens) : null,
+      tideLine,
+    }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  };
 
   const refresh = () => {
     day.mutate();
@@ -167,6 +201,15 @@ export default function DayDetail({ date }: { date: string | null }) {
           </Box>
         ) : (
           <>
+            {trips.length > 0 && (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+                {(() => {
+                  const sp = spots.data?.find((x) => x.id === trips[0].spot_id);
+                  return sp && date ? <SunMoonRow lat={sp.lat} lon={sp.lon} date={date} /> : null;
+                })()}
+                <Button variant="outlined" startIcon={<ShareIcon />} onClick={shareDay} sx={{ alignSelf: "flex-start" }}>分享圖卡</Button>
+              </Box>
+            )}
             {trips.map((t) => {
               const squid = t.catches.filter((c) => c.species === "squid").length;
               const fish = t.catches.filter((c) => c.species === "fish").length;
@@ -203,6 +246,9 @@ export default function DayDetail({ date }: { date: string | null }) {
                       )}
                     </Box>
                     <TripConditions trip={t} />
+                    <Box sx={{ mt: 1.5 }}>
+                      <TideCurve events={t.tide_events ?? []} from={t.start_at} to={t.end_at} label="這趟的潮汐" />
+                    </Box>
                     {t.note && <Typography variant="body2" sx={{ mt: 1.5 }} color="text.secondary">{t.note}</Typography>}
                     {t.catches.length > 0 && <Divider sx={{ my: 1 }} />}
                     {t.catches.map((c) => (

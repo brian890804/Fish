@@ -2,6 +2,7 @@
 import { buildPushPayload } from "@block65/webcrypto-web-push";
 import { TIDE_LABEL, twDate, twHour } from "../shared/conditions";
 import { isUnsafeHour, KNOT } from "../shared/safety";
+import { OWNER_ID } from "./auth";
 
 export interface PushEnv {
   DB: D1Database;
@@ -77,7 +78,9 @@ export function describe(windows: Window[], spotName: string, now: number) {
 
 export async function sendToAll(env: PushEnv, payload: { title: string; body: string; url?: string }) {
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return { sent: 0, failed: 0, skipped: "沒有設定 VAPID 金鑰" };
-  const { results } = await env.DB.prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions").all<{ endpoint: string; p256dh: string; auth: string }>();
+  // 只通知這個帳號開啟通知的裝置
+  const { results } = await env.DB.prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?")
+    .bind(OWNER_ID).all<{ endpoint: string; p256dh: string; auth: string }>();
   let sent = 0;
   let failed = 0;
   for (const s of results) {

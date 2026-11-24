@@ -108,47 +108,28 @@ const ROWS: Row[] = [
   },
   {
     key: "tide", label: <InfoLabel text="潮汐" info={TIDE_INFO} label="潮汐說明" />, tall: true,
-    render: (h, c) => {
+    // 只有滿潮、乾潮的那一格寫時間；漲潮、退潮用底色區分，不寫字
+    render: (_h, c) => {
       const e = eventIn(c);
-      // 這一格裡有滿潮或乾潮：顯示徽章和時間
-      if (e) {
-        const st = TIDE_STYLE[e.type];
-        return (
-          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
-            <Box
-              component="span"
-              sx={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                minWidth: 20, height: 16, px: "5px", borderRadius: "6px",
-                fontSize: 11, fontWeight: 900, lineHeight: 1, color: st.color, bgcolor: st.bg,
-              }}
-            >
-              {st.text}
-            </Box>
-            <span style={{ fontSize: 10, fontWeight: 700, lineHeight: 1, color: TEXT.primary, letterSpacing: "-0.02em" }}>{dayjs.unix(e.time).format("HH:mm")}</span>
-          </Box>
-        );
-      }
-      if (!h.tide) return "-";
-      const st = TIDE_STYLE[h.tide];
-      return <Box component="span" sx={{ color: h.tide === "rising" || h.tide === "falling" ? st.color : TEXT.primary, fontSize: 12.5 }}>{st.text}</Box>;
-    },
-    bg: (h, c) => (eventIn(c) ? "rgba(103,232,249,0.08)" : h.tide === "rising" ? TIDE_STYLE.rising.bg : h.tide === "falling" ? TIDE_STYLE.falling.bg : undefined),
-  },
-  {
-    key: "range", label: <InfoLabel text="潮差" info={TIDE_INFO} label="潮差說明" />, tall: true,
-    // 每天第一格顯示大／中／小潮與潮差
-    render: (h, c) => {
-      if (!c.newDay) return "";
-      const dayStart = dayjs.unix(h.time).startOf("day").unix();
-      const cls = tideRangeClass(dayStart + 12 * 3600);
-      const cm = dayRangeCm(dayStart, c.tideEvents);
+      if (!e) return null;
+      const color = e.type === "high" ? "#67e8f9" : "#cbd5e1";
       return (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", lineHeight: 1 }}>
-          <span style={{ fontSize: 11.5, fontWeight: 900, color: cls === "大潮" ? "#fca5a5" : cls === "小潮" ? "#93c5fd" : TEXT.primary }}>{cls}</span>
-          {cm != null && <span style={{ fontSize: 10, fontWeight: 700, color: TEXT.secondary }}>{cm}cm</span>}
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", lineHeight: 1 }}>
+          <span style={{ fontSize: 11, fontWeight: 900, color }}>{e.type === "high" ? "滿" : "乾"}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: TEXT.primary }}>{dayjs.unix(e.time).format("HH:mm")}</span>
         </Box>
       );
+    },
+    bg: (h, c) => (eventIn(c) ? undefined : h.tide === "rising" ? "rgba(34,211,238,0.16)" : h.tide === "falling" ? "rgba(148,163,184,0.12)" : undefined),
+  },
+  {
+    // 潮差：只在每天第一格顯示當天的數字（最高滿潮 − 最低乾潮），不另外標大小潮
+    key: "range", label: <InfoLabel text="潮差" info={TIDE_INFO} label="潮差說明" />, tall: true,
+    render: (h, c) => {
+      if (!c.newDay) return null;
+      const dayStart = dayjs.unix(h.time).startOf("day").unix();
+      const cm = dayRangeCm(dayStart, c.tideEvents);
+      return cm == null ? "-" : <span style={{ fontSize: 12, fontWeight: 800 }}>{cm}cm</span>;
     },
     bg: (_h, c) => (c.newDay ? "rgba(148,163,184,0.08)" : undefined),
   },
@@ -168,10 +149,31 @@ function textOn(hex: string): string {
   return lum > 0.6 ? "#0b1520" : "#ffffff";
 }
 
+function ScoreLegend() {
+  const items: [string, string, string][] = [
+    ["65+", "#4caf50", "很好"],
+    ["55+", "#8bc34a", "可以出門"],
+    ["45+", "#ffc107", "普通"],
+    ["35+", "#ff9800", "偏差"],
+    ["<35", "#f44336", "不建議"],
+  ];
+  return (
+    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", fontSize: 12, color: TEXT.secondary, px: 2, pb: 1 }}>
+      <span>評分（50 = 普通，滿分 100）：</span>
+      {items.map(([k, c, l]) => (
+        <Box key={k} sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+          <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: c }} />
+          {k} {l}
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 const LABEL_W = 56;
 const HEAD_H = 42;
 
-export default function ForecastTable({
+function ForecastTableInner({
   hours, tideEvents = [], step = 2, cellWidth = 42, rowHeight = 32,
 }: { hours: ForecastHour[]; tideEvents?: TideEvt[]; step?: number; cellWidth?: number; rowHeight?: number }) {
   const nowHour = dayjs().startOf("hour").unix();
@@ -240,6 +242,17 @@ export default function ForecastTable({
           </Box>
         );
       })}
+    </Box>
+  );
+}
+
+export default function ForecastTable(props: {
+  hours: ForecastHour[]; tideEvents?: TideEvt[]; step?: number; cellWidth?: number; rowHeight?: number;
+}) {
+  return (
+    <Box>
+      <ScoreLegend />
+      <ForecastTableInner {...props} />
     </Box>
   );
 }

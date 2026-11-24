@@ -10,7 +10,9 @@ import { del, photoUrl, post, put, uploadPhoto } from "../lib/api";
 import type { Catch, Species, Trip } from "../lib/types";
 import { SpeciesIcon } from "./icons";
 import EgiColorPicker from "./EgiColorPicker";
+import { WATER_COLORS } from "../../shared/water";
 import PhotoViewer from "./PhotoViewer";
+import LazyImage from "./LazyImage";
 import { readPhotoMeta } from "../lib/exif";
 import { nearestSpot } from "../lib/geo";
 import { useSpots } from "../hooks/useSpots";
@@ -45,6 +47,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
   const [uploadingCount, setUploadingCount] = useState(0);
   const [viewer, setViewer] = useState<{ keys: string[]; start: number } | null>(null);
   const [egiColor, setEgiColor] = useState<string | null>(null);
+  const [water, setWater] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -66,6 +69,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       setNote(item.note ?? "");
       setPhotos(item.photo_keys?.length ? item.photo_keys : item.photo_key ? [item.photo_key] : []);
       setEgiColor(item.egi_color ?? null);
+      setWater(item.water_color ?? null);
     } else {
       // 正在出釣中就預設現在時間，否則預設出釣開始時間
       const now = dayjs().unix();
@@ -82,6 +86,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       setPhotos([]);
       // 木蝦顏色預設不選（常常會忘記用了哪支，不要自動帶）
       setEgiColor(null);
+      setWater(null);
     }
   }, [open, item, trip]);
 
@@ -164,6 +169,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       note: note || null,
       photo_keys: photos,
       egi_color: egiColor,
+      water_color: water,
     };
     setBusy(true);
     setError("");
@@ -227,6 +233,14 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
             />
           </Box>
           <EgiColorPicker value={egiColor} onChange={setEgiColor} />
+          <Box>
+            <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 600, mb: 0.75 }}>水色（可不選）</Typography>
+            <ToggleButtonGroup exclusive size="small" value={water} onChange={(_, v) => setWater(v)}>
+              {WATER_COLORS.map((w) => (
+                <ToggleButton key={w.key} value={w.key} sx={{ px: 1.5 }}>{w.label}</ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          </Box>
           <TextField label="備註" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} placeholder="餌木、釣法、水深…" />
 
           {/* 限定照片格式（不用 image/*），Android 會直接開相簿；iPhone 的選單由 Safari 決定，第一個是「照片圖庫」 */}
@@ -235,10 +249,10 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
               {photos.map((k, i) => (
                 <Box key={k} sx={{ position: "relative", aspectRatio: "1", borderRadius: 2, overflow: "hidden", bgcolor: "rgba(148,163,184,0.1)" }}>
-                  <Box
-                    component="img" src={photoUrl(k, "thumb")} alt={`第 ${i + 1} 張照片`} role="button"
+                  <LazyImage
+                    src={photoUrl(k, "thumb")} alt={`第 ${i + 1} 張照片`} ariaLabel={`第 ${i + 1} 張照片`}
                     onClick={() => setViewer({ keys: photos, start: i })}
-                    sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "zoom-in" }}
+                    sx={{ width: "100%", height: "100%", cursor: "zoom-in" }}
                   />
                   {i === 0 && (
                     <Box sx={{ position: "absolute", left: 6, bottom: 6, fontSize: 10.5, fontWeight: 800, px: 0.75, py: 0.1, borderRadius: 1, bgcolor: "rgba(0,0,0,0.6)", color: "#fff" }}>封面</Box>

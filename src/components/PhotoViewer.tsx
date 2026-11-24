@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Dialog, IconButton, Typography } from "@mui/material";
 import CloseIcon from "@mui/icons-material/CloseRounded";
 import { photoUrl } from "../lib/api";
+import LazyImage from "./LazyImage";
 
 /** 全螢幕看照片：左右滑動切換，下方顯示第幾張 */
 export default function PhotoViewer({ keys, start = 0, onClose }: { keys: string[] | null; start?: number; onClose: () => void }) {
@@ -38,7 +39,7 @@ export default function PhotoViewer({ keys, start = 0, onClose }: { keys: string
       >
         {(keys ?? []).map((k) => (
           <Box key={k} sx={{ flex: "0 0 100%", height: "100%", display: "grid", placeItems: "center", scrollSnapAlign: "center" }}>
-            <Box component="img" src={photoUrl(k)} alt="" sx={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+            <LazyImage src={photoUrl(k)} alt="" fit="contain" sx={{ width: "100%", height: "100%", bgcolor: "transparent" }} />
           </Box>
         ))}
       </Box>

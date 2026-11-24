@@ -6,15 +6,90 @@ export class ApiError extends Error {
   }
 }
 
+const CACHE_PREFIX = "fish.cache:";
+const AUTH_FLAG = "fish.authed";
+
+/** 讀取上次存的資料（離線時用） */
+function readCache(path: string): unknown {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + path);
+    return raw == null ? undefined : JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCache(path: string, data: unknown) {
+  try {
+    localStorage.setItem(CACHE_PREFIX + path, JSON.stringify(data));
+  } catch {
+    /* 空間不夠就不存，不影響使用 */
+  }
+}
+
+export function clearCache() {
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith(CACHE_PREFIX)) localStorage.removeItem(k);
+  } catch {
+    /* 忽略 */
+  }
+}
+
+export function setAuthFlag(on: boolean) {
+  try {
+    if (on) localStorage.setItem(AUTH_FLAG, "1");
+    else localStorage.removeItem(AUTH_FLAG);
+  } catch {
+    /* 忽略 */
+  }
+}
+export const wasAuthed = () => {
+  try {
+    return localStorage.getItem(AUTH_FLAG) === "1";
+  } catch {
+    return false;
+  }
+};
+
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
+  const isGet = !init.method || init.method === "GET";
   const headers = new Headers(init.headers);
   if (init.body && typeof init.body === "string") headers.set("content-type", "application/json");
-  const res = await fetch(`/api${path}`, { ...init, headers });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { ...init, headers, credentials: "same-origin" });
+  } catch {
+    // 離線（或網路斷線）：讀取類的請求退回上次存的資料
+    if (isGet) {
+      const cached = readCache(path);
+      if (cached !== undefined) return cached as T;
+    }
+    throw new ApiError(0, "目前離線，而且這份資料還沒有存過");
+  }
   const data = await res.json().catch(() => ({}));
+  // 登入過期：回到登入頁（登入本身失敗不算過期）
+  if (res.status === 401 && path !== "/login") window.dispatchEvent(new Event("fish:logout"));
   if (!res.ok) {
     throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`);
   }
+  if (isGet) writeCache(path, data);
   return data as T;
+}
+
+/** 登入：成功後 cookie 會存 400 天，之後不用再輸入 */
+export async function login(username: string, password: string) {
+  await post("/login", { username, password });
+  setAuthFlag(true);
+}
+
+export async function logout() {
+  try {
+    await post("/logout", {});
+  } finally {
+    setAuthFlag(false);
+    clearCache();
+    window.dispatchEvent(new Event("fish:logout"));
+  }
 }
 
 export const post = <T = any>(path: string, data: unknown) => api<T>(path, { method: "POST", body: JSON.stringify(data) });
@@ -60,7 +135,8 @@ async function resizeImage(file: Blob, maxSide: number, quality: number): Promis
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("壓縮失敗"))), "image/jpeg", quality),
     );
   } catch {
-    return file; // 瀏覽器不支援就直接傳原圖
+    // 瀏覽器無法處理這個檔案（例如特殊格式）：明確告訴使用者，不默默上傳原檔
+    throw new Error("這張照片無法處理（可能是特殊格式），請換成 JPG 或 PNG 再試");
   }
 }
 

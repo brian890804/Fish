@@ -30,10 +30,9 @@ export default function MobileApp({ tab, onTabChange }: { tab: AppTab; onTabChan
   return (
     <Box
       sx={{
+        // 用 position: fixed 撐滿螢幕：iPhone 的 PWA（加到桌面）用 100vh／100dvh 量高度常常會偏大，導覽列就被推到上面
+        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         display: "flex", flexDirection: "column", overflow: "hidden",
-        // 舊瀏覽器用 100vh；支援 dvh 的用 100dvh（會跟著 Safari 工具列伸縮，不會被擋住）
-        height: "100vh",
-        "@supports (height: 100dvh)": { height: "100dvh" },
       }}
     >
       <Box

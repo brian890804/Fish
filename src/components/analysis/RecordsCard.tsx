@@ -5,6 +5,7 @@ import dayjs from "dayjs";
 import { photoUrl, useApi } from "../../lib/api";
 import { TEXT, SURFACE } from "../../theme";
 import { EgiDot } from "../EgiColorPicker";
+import LazyImage from "../LazyImage";
 import { SquidIcon } from "../icons";
 
 interface Records {
@@ -52,7 +53,7 @@ export default function RecordsCard({ onOpenDate }: { onOpenDate?: (date: string
                   {i < 3 ? <EmojiEventsIcon sx={{ color: MEDAL[i], fontSize: 24 }} /> : <Typography sx={{ fontWeight: 800, color: TEXT.secondary }}>{i + 1}</Typography>}
                 </Box>
                 {c.photo_key ? (
-                  <Box component="img" src={photoUrl(c.photo_key, "thumb")} loading="lazy" alt="" sx={{ width: 44, height: 44, borderRadius: 1.5, objectFit: "cover", flexShrink: 0 }} />
+                  <LazyImage src={photoUrl(c.photo_key, "thumb")} sx={{ width: 44, height: 44, borderRadius: 1.5, objectFit: "cover", flexShrink: 0 }} />
                 ) : (
                   <Box sx={{ width: 44, height: 44, display: "grid", placeItems: "center", flexShrink: 0 }}><SquidIcon sx={{ fontSize: 36 }} /></Box>
                 )}

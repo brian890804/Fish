@@ -63,6 +63,7 @@ export interface Catch {
   photo_keys?: string[];
   /** 木蝦顏色：red / blue / green / purple / gray / yellow / brown */
   egi_color?: string | null;
+  water_color?: string | null;
 }
 
 export interface Trip {

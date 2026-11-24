@@ -8,6 +8,8 @@ import { useToday } from "../hooks/useToday";
 import ForecastTable from "../components/ForecastTable";
 import CatchCount from "../components/CatchCount";
 import ConditionsGrid from "../components/ConditionsGrid";
+import SunMoonRow from "../components/SunMoonRow";
+import TideCurve from "../components/TideCurve";
 import { spinSx } from "../lib/sx";
 import { TEXT } from "../theme";
 
@@ -53,6 +55,21 @@ export default function TodayPage({ onOpenDate }: { onOpenDate: (d: string) => v
           </Button>
         </CardContent>
       </Card>
+
+      {/* 日出日落、未來 36 小時潮汐 */}
+      {t.fc.data && (
+        <Card>
+          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <SunMoonRow lat={t.fc.data.spot.lat} lon={t.fc.data.spot.lon} date={t.today} />
+            <TideCurve
+              events={t.fc.data.tideEvents ?? []}
+              from={dayjs().startOf("hour").unix()}
+              to={dayjs().startOf("hour").unix() + 36 * 3600}
+              label="未來 36 小時潮汐"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* 現在條件 */}
       {t.fc.error && <Alert severity="error">{String(t.fc.error.message)}</Alert>}
