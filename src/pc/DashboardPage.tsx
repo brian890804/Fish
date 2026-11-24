@@ -1,3 +1,4 @@
+import { useStoredState } from "../lib/prefs";
 import { useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Skeleton, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/AddRounded";
@@ -28,7 +29,7 @@ function greeting() {
 export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate: (d: string) => void; onGoCalendar: () => void }) {
   const t = useToday();
   const cal = useCalendar(dayjs().startOf("month"));
-  const [step, setStep] = useState(2);
+  const [step, setStep] = useStoredState<number>("fish.forecastStep", 2);
   const recent = [...(cal.data ?? [])].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
 
   return (

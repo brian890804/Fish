@@ -34,6 +34,16 @@ export default function App() {
     return () => window.removeEventListener("fish:logout", onOut);
   }, []);
 
+  // 啟動完成（登入狀態確認好）就淡出開場畫面
+  useEffect(() => {
+    if (authed === null) return;
+    const splash = document.getElementById("splash");
+    if (!splash) return;
+    splash.style.opacity = "0";
+    const t = setTimeout(() => splash.remove(), 260);
+    return () => clearTimeout(t);
+  }, [authed]);
+
   // 背景幫舊照片補縮圖（延遲幾秒，不搶首頁載入）
   useEffect(() => {
     if (!authed) return;

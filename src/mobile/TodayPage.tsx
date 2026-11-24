@@ -1,3 +1,4 @@
+import { useStoredState } from "../lib/prefs";
 import { useState } from "react";
 import { Box, Button, Card, CardContent, IconButton, Typography, Skeleton, Alert, ToggleButton, ToggleButtonGroup } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/RefreshRounded";
@@ -15,7 +16,7 @@ import { TEXT } from "../theme";
 
 export default function TodayPage({ onOpenDate }: { onOpenDate: (d: string) => void }) {
   const t = useToday();
-  const [step, setStep] = useState(2);
+  const [step, setStep] = useStoredState<number>("fish.forecastStep", 2);
 
   return (
     <Box sx={{ px: 2, pt: 2.5, pb: 2, display: "flex", flexDirection: "column", gap: 2 }}>

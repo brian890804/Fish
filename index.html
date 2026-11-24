@@ -21,6 +21,10 @@
     </style>
   </head>
   <body>
+    <!-- 開場畫面：HTML 一載入就顯示，App 啟動完成後淡出移除 -->
+    <div id="splash" style="position:fixed;inset:0;background:#000;display:grid;place-items:center;z-index:9999;transition:opacity .25s ease">
+      <img src="/icon-192.png" width="96" height="96" alt="" style="border-radius:22px" />
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
