@@ -4,6 +4,7 @@ import AnalysisFilters from "../components/analysis/AnalysisFilters";
 import SummaryTiles from "../components/analysis/SummaryTiles";
 import Highlights from "../components/analysis/Highlights";
 import EgiCard from "../components/analysis/EgiCard";
+import RecordsCard from "../components/analysis/RecordsCard";
 import FactorCard, { SCORE_HELP } from "../components/analysis/FactorCard";
 import PageHeader from "./PageHeader";
 
@@ -13,6 +14,7 @@ export default function AnalysisPage() {
   return (
     <>
       <PageHeader title="釣況分析" subtitle="依照區間彙總，找出什麼條件下比較好釣" />
+      <Box sx={{ mb: 2.5 }}><RecordsCard /></Box>
       <Card sx={{ mb: 2.5 }}>
         <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
           <AnalysisFilters a={a} inline />

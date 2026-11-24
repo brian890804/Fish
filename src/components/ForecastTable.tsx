@@ -26,6 +26,8 @@ interface Row {
   render: (h: ForecastHour, c: Ctx) => React.ReactNode;
   /** 底色：實色（#rrggbb）會依亮度自動選字色 */
   bg?: (h: ForecastHour, c: Ctx) => string | undefined;
+  /** 兩行內容（徽章＋時間）的列，高一點 */
+  tall?: boolean;
 }
 
 // 潮汐：漲潮、退潮用不同底色；滿潮、乾潮另外用徽章標出時間
@@ -105,16 +107,25 @@ const ROWS: Row[] = [
     bg: (h) => (h.precip_mm ? `rgba(96,165,250,${0.25 + Math.min(0.7, h.precip_mm / 3)})` : undefined),
   },
   {
-    key: "tide", label: <InfoLabel text="潮汐" info={TIDE_INFO} label="潮汐說明" />,
+    key: "tide", label: <InfoLabel text="潮汐" info={TIDE_INFO} label="潮汐說明" />, tall: true,
     render: (h, c) => {
       const e = eventIn(c);
       // 這一格裡有滿潮或乾潮：顯示徽章和時間
       if (e) {
         const st = TIDE_STYLE[e.type];
         return (
-          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.05 }}>
-            <Box component="span" sx={{ fontSize: 12, fontWeight: 900, color: st.color, bgcolor: st.bg, px: 0.6, borderRadius: 1 }}>{st.text}</Box>
-            <span style={{ fontSize: 10, fontWeight: 700, color: TEXT.primary }}>{dayjs.unix(e.time).format("HH:mm")}</span>
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
+            <Box
+              component="span"
+              sx={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                minWidth: 20, height: 16, px: "5px", borderRadius: "6px",
+                fontSize: 11, fontWeight: 900, lineHeight: 1, color: st.color, bgcolor: st.bg,
+              }}
+            >
+              {st.text}
+            </Box>
+            <span style={{ fontSize: 10, fontWeight: 700, lineHeight: 1, color: TEXT.primary, letterSpacing: "-0.02em" }}>{dayjs.unix(e.time).format("HH:mm")}</span>
           </Box>
         );
       }
@@ -125,7 +136,7 @@ const ROWS: Row[] = [
     bg: (h, c) => (eventIn(c) ? "rgba(103,232,249,0.08)" : h.tide === "rising" ? TIDE_STYLE.rising.bg : h.tide === "falling" ? TIDE_STYLE.falling.bg : undefined),
   },
   {
-    key: "range", label: <InfoLabel text="潮差" info={TIDE_INFO} label="潮差說明" />,
+    key: "range", label: <InfoLabel text="潮差" info={TIDE_INFO} label="潮差說明" />, tall: true,
     // 每天第一格顯示大／中／小潮與潮差
     render: (h, c) => {
       if (!c.newDay) return "";
@@ -133,7 +144,7 @@ const ROWS: Row[] = [
       const cls = tideRangeClass(dayStart + 12 * 3600);
       const cm = dayRangeCm(dayStart, c.tideEvents);
       return (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.05 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", lineHeight: 1 }}>
           <span style={{ fontSize: 11.5, fontWeight: 900, color: cls === "大潮" ? "#fca5a5" : cls === "小潮" ? "#93c5fd" : TEXT.primary }}>{cls}</span>
           {cm != null && <span style={{ fontSize: 10, fontWeight: 700, color: TEXT.secondary }}>{cm}cm</span>}
         </Box>
@@ -185,7 +196,7 @@ export default function ForecastTable({
           <Box
             key={r.key}
             sx={{
-              ...cell, width: LABEL_W, minWidth: LABEL_W, boxShadow: "none", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              ...cell, width: LABEL_W, minWidth: LABEL_W, height: r.tall ? rowHeight + 8 : rowHeight, boxShadow: "none", flexDirection: "column", alignItems: "center", justifyContent: "center",
               lineHeight: 1.05, bgcolor: zebra(i), textAlign: "center", fontSize: 12.5, color: TEXT.primary,
             }}
           >
@@ -221,7 +232,7 @@ export default function ForecastTable({
               const bg = r.bg?.(h, ctx);
               const solid = !!bg && bg.startsWith("#");
               return (
-                <Box key={r.key} sx={{ ...cell, bgcolor: bg && bg !== "transparent" ? bg : zebra(ri), color: solid ? textOn(bg!) : TEXT.primary }}>
+                <Box key={r.key} sx={{ ...cell, height: r.tall ? rowHeight + 8 : rowHeight, bgcolor: bg && bg !== "transparent" ? bg : zebra(ri), color: solid ? textOn(bg!) : TEXT.primary }}>
                   {r.render(h, ctx)}
                 </Box>
               );

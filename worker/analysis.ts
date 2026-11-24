@@ -20,6 +20,7 @@ interface WRow {
   time: number;
   temp_c: number | null;
   wind_ms: number | null;
+  gust_ms: number | null;
   wind_dir: number | null;
   cloud_pct: number | null;
   precip_mm: number | null;

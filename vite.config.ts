@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // 自訂 service worker（src/sw.ts），才能收推播
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
       manifest: {
         name: "釣況紀錄",
@@ -24,9 +28,8 @@ export default defineConfig({
           { src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,svg,png}"],
-        navigateFallbackDenylist: [/^\/api\//],
       },
     }),
   ],

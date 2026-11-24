@@ -3,6 +3,8 @@ import { analyze, forecast, type Species } from "./analysis";
 import { ensureWeather, refreshSpot, type Spot } from "./weather";
 import { loadTideEvents, refreshTide } from "./tide";
 import { isEgiColor } from "../shared/egi";
+import { PUSH_HOUR, describe, goodWindows, sendToAll } from "./push";
+import { twHour } from "../shared/conditions";
 import { MAX_PHOTO_BYTES, deletePhotos, getPhoto, putPhoto } from "./photos";
 
 export interface Env {
@@ -10,6 +12,9 @@ export interface Env {
   ASSETS: Fetcher;
   /** 中央氣象署開放資料金鑰（wrangler secret put CWA_API_KEY），沒設定時潮汐用模型 */
   CWA_API_KEY?: string;
+  /** Web Push 金鑰（node scripts/setup-push.mjs 產生並存成 secret） */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
 }
 
 class HttpError extends Error {
@@ -326,11 +331,98 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     return json(await analyze(env.DB, { from, to, spotId, species }));
   }
 
+  // ---- 個人紀錄：最大隻排行、每月胴長趨勢 ----
+  if (path === "/records" && method === "GET") {
+    const species = url.searchParams.get("species") === "fish" ? "fish" : "squid";
+    const { results: top } = await env.DB.prepare(
+      `SELECT c.id, c.caught_at, c.length_cm, c.weight_g, c.egi_color, c.photo_key, t.date, s.name AS spot_name
+         FROM catches c JOIN trips t ON t.id = c.trip_id JOIN spots s ON s.id = t.spot_id
+        WHERE c.species = ? AND c.length_cm IS NOT NULL
+        ORDER BY c.length_cm DESC, c.caught_at LIMIT 5`,
+    ).bind(species).all();
+    const { results: months } = await env.DB.prepare(
+      `SELECT substr(t.date, 1, 7) AS month,
+              COUNT(*) AS catches,
+              COUNT(c.length_cm) AS measured,
+              ROUND(AVG(c.length_cm), 1) AS avg_cm,
+              MAX(c.length_cm) AS max_cm
+         FROM catches c JOIN trips t ON t.id = c.trip_id
+        WHERE c.species = ?
+        GROUP BY month ORDER BY month`,
+    ).bind(species).all();
+    // 每月出釣次數（含槓龜），用來看每次平均釣幾隻
+    const { results: tripsByMonth } = await env.DB.prepare(
+      "SELECT substr(date, 1, 7) AS month, COUNT(*) AS trips FROM trips GROUP BY month",
+    ).all<{ month: string; trips: number }>();
+    const tripMap = new Map(tripsByMonth.map((r) => [r.month, r.trips]));
+    return json({
+      species,
+      top,
+      months: (months as { month: string }[]).map((m) => ({ ...m, trips: tripMap.get(m.month) ?? 0 })),
+    });
+  }
+
+  // ---- 好時段推播 ----
+  if (path === "/push/key" && method === "GET") {
+    return json({ publicKey: env.VAPID_PUBLIC_KEY ?? null });
+  }
+  if (path === "/push/subscribe" && method === "POST") {
+    const { subscription } = await body<{ subscription: { endpoint: string; keys: { p256dh: string; auth: string } } }>(req);
+    if (!subscription?.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) throw new HttpError(400, "訂閱資料不完整");
+    if (!/^https:\/\//.test(subscription.endpoint)) throw new HttpError(400, "訂閱網址不正確");
+    await env.DB.prepare(
+      `INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES (?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth`,
+    ).bind(subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth).run();
+    return json({ ok: true });
+  }
+  if (path === "/push/unsubscribe" && method === "POST") {
+    const { endpoint } = await body<{ endpoint: string }>(req);
+    await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").bind(endpoint ?? "").run();
+    return json({ ok: true });
+  }
+  // 預覽：現在檢查的話，會通知什麼（不會真的送出）
+  if (path === "/push/preview" && method === "GET") {
+    return json(await planPush(env));
+  }
+  if (path === "/push/test" && method === "POST") {
+    return json(await sendToAll(env, { title: "🦑 推播測試", body: "收得到這則通知，代表好時段推播設定成功了。" }));
+  }
+
   if (path === "/refresh" && method === "POST") {
     return json(await refreshAll(env));
   }
 
   throw new HttpError(404, "找不到這個 API");
+}
+
+/** 看接下來 24 小時有沒有好時段 */
+async function planPush(env: Env) {
+  const now = Math.floor(Date.now() / 1000);
+  const spot = await weatherSpotOf(env, await getSpot(env, null));
+  const history = await analyze(env.DB, { from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species: "squid" });
+  const start = hourFloor(now) + 3600;
+  const hours = await forecast(env.DB, spot.id, start, start + 24 * 3600, history);
+  const windows = goodWindows(hours, start, start + 24 * 3600);
+  return {
+    windows: windows.map((w) => ({ from: w.from, to: w.to, bestScore: w.bestScore })),
+    message: windows.length ? describe(windows, spot.name, now) : null,
+  };
+}
+
+/** 排程：每天下午檢查一次，有好時段才通知 */
+async function dailyPush(env: Env) {
+  const now = Math.floor(Date.now() / 1000);
+  if (twHour(now) !== PUSH_HOUR) return;
+  const day = twDate(now);
+  // 先佔位，避免同一個小時內的排程重複通知
+  const claim = await env.DB.prepare("INSERT INTO push_sent (day, sent_at) VALUES (?, ?) ON CONFLICT(day) DO NOTHING").bind(day, now).run();
+  if (!claim.meta.changes) return;
+  const plan = await planPush(env);
+  if (!plan.message) return;
+  const r = await sendToAll(env, plan.message);
+  await env.DB.prepare("UPDATE push_sent SET message = ? WHERE day = ?").bind(`${plan.message.title}｜${JSON.stringify(r)}`, day).run();
+  console.log("好時段推播", JSON.stringify({ ...plan.message, ...r }));
 }
 
 async function refreshAll(env: Env) {
@@ -363,6 +455,7 @@ export default {
     }
   },
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(refreshAll(env));
+    // 先更新天氣，再用最新的預報判斷要不要推播
+    ctx.waitUntil(refreshAll(env).then(() => dailyPush(env)).catch((e) => console.error("排程失敗", e)));
   },
 } satisfies ExportedHandler<Env>;

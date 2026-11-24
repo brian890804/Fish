@@ -8,6 +8,7 @@ import { getPosition, hasOwnLocation } from "../lib/geo";
 import { post, put } from "../lib/api";
 import { useSpots } from "../hooks/useSpots";
 import type { Spot } from "../lib/types";
+import PushCard from "./PushCard";
 
 const OWN = "own";
 
@@ -70,7 +71,7 @@ function SpotEditor({ spot, spots, onSaved }: { spot?: Spot; spots: Spot[]; onSa
         <TextField size="small" label="經度" value={lon} onChange={(e) => setLon(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
       </Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -0.5 }}>
-        <Button size="small" variant="outlined" startIcon={locating ? <CircularProgress size={14} /> : <MyLocationIcon />} disabled={locating} onClick={useHere}>
+        <Button size="small" variant="outlined" startIcon={locating ? <CircularProgress size={14} /> : <MyLocationIcon />} disabled={locating} onClick={useHere} sx={{ whiteSpace: "nowrap", flexShrink: 0 }}>
           用目前位置
         </Button>
         <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
@@ -137,6 +138,7 @@ export default function SettingsContent() {
           {spots.data && <SpotEditor spots={spots.data} onSaved={() => spots.mutate()} />}
         </CardContent>
       </Card>
+      <PushCard />
       <Card>
         <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           <Typography variant="h6">天氣資料</Typography>
