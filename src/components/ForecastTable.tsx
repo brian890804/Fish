@@ -1,7 +1,7 @@
 import { Box, Typography } from "@mui/material";
 import dayjs from "dayjs";
 import type { ForecastHour } from "../lib/types";
-import { kn, windColor, waveColor, tempColor, scoreColor, weekday } from "../lib/format";
+import { kn, windColor, waveColor, tempColor, scoreColor } from "../lib/format";
 import { TIDE_LABEL } from "../../shared/conditions";
 import Arrow from "./Arrow";
 
@@ -57,8 +57,9 @@ export default function ForecastTable({ hours, step = 2, cellWidth = 34, rowHeig
         return (
           <Box key={h.time} sx={{ borderLeft: newDay && i > 0 ? "2px solid rgba(255,255,255,0.35)" : undefined }}>
             <Box sx={{ ...cell, height: 40, flexDirection: "column", lineHeight: 1.1, fontSize: 11, bgcolor: "rgba(255,255,255,0.04)" }}>
-              <span style={{ fontWeight: 800 }}>{newDay ? `${weekday(h.time)}${d.date()}` : " "}</span>
-              <span>{d.format("HH")}</span>
+              {/* 每天第一格顯示日期，例如 11/24；底下一律顯示小時，例如 14h */}
+              <span style={{ fontWeight: 800, fontSize: 10.5, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>{newDay ? d.format("M/D") : " "}</span>
+              <span>{d.format("HH")}h</span>
             </Box>
             {ROWS.map((r) => {
               const bg = r.bg?.(h) ?? "transparent";
