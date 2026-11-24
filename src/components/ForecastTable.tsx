@@ -171,7 +171,7 @@ function ScoreLegend() {
 }
 
 const LABEL_W = 56;
-const HEAD_H = 42;
+const HEAD_H = 52;
 
 function ForecastTableInner({
   hours, tideEvents = [], step = 2, cellWidth = 42, rowHeight = 32,
@@ -225,8 +225,12 @@ function ForecastTableInner({
           >
             <Box sx={{ ...cell, height: HEAD_H, flexDirection: "column", lineHeight: 1.15, bgcolor: SURFACE.raised, boxShadow: "none" }}>
               {/* 每天第一格顯示日期，例如 11/24；底下一律顯示小時，例如 14h */}
+              {/* 日期與星期分兩行，星期用括號，例如 (二)，欄寬窄也不會被切掉 */}
               <span style={{ fontWeight: 800, fontSize: 11, letterSpacing: "-0.02em", whiteSpace: "nowrap", color: newDay ? "#5cc8ff" : "transparent" }}>
-                {newDay ? `${d.format("M/D")}${d.format("dd")}` : "·"}
+                {newDay ? d.format("M/D") : "·"}
+              </span>
+              <span style={{ fontWeight: 700, fontSize: 11, whiteSpace: "nowrap", color: newDay ? "#5cc8ff" : "transparent" }}>
+                {newDay ? `(${d.format("dd")})` : "·"}
               </span>
               <span style={{ fontSize: 13, fontWeight: 800, color: isNow ? "#5cc8ff" : TEXT.primary }}>{d.format("HH")}h</span>
             </Box>
