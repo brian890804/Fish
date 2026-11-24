@@ -58,7 +58,7 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
               )}
             </Box>
             <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.5 }}>
-              <ConditionsGrid now={t.now} columns={3} />
+              <ConditionsGrid now={t.now} columns={3} size={84} />
               {t.best.length > 0 && (
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
                   <Typography variant="body2" color="text.secondary">今天較好的時段</Typography>
