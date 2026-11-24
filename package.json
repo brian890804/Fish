@@ -1,0 +1,41 @@
+{
+  "name": "fish-log",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "wrangler dev --port 8787 --test-scheduled",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "db:migrate:local": "wrangler d1 migrations apply fish-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply fish-db --remote",
+    "deploy": "pnpm build && wrangler deploy"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.4.0",
+    "@mui/material": "^9.4.0",
+    "dayjs": "^1.11.23",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "suncalc": "^1.9.0",
+    "swr": "^2.5.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251001.0",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@types/suncalc": "^1.9.2",
+    "@vitejs/plugin-react": "^6.1.1",
+    "oxlint": "^1.81.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vite-plugin-pwa": "^2.0.0",
+    "workbox-window": "^7.4.1",
+    "wrangler": "^4.148.0"
+  },
+  "packageManager": "pnpm@12.4.2"
+}
