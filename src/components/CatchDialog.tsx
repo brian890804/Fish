@@ -20,6 +20,8 @@ interface Props {
   onSaved: () => void;
 }
 
+const MAX_PHOTOS = 6;
+
 const numOrNull = (s: string) => (s.trim() === "" || !Number.isFinite(Number(s)) ? null : Number(s));
 
 export default function CatchDialog({ open, trip, item, onClose, onSaved }: Props) {
@@ -29,7 +31,8 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
   const [weight, setWeight] = useState("");
   const [fishName, setFishName] = useState("");
   const [note, setNote] = useState("");
-  const [photoKey, setPhotoKey] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [egiColor, setEgiColor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -47,7 +50,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       setWeight(item.weight_g?.toString() ?? "");
       setFishName(item.fish_name ?? "");
       setNote(item.note ?? "");
-      setPhotoKey(item.photo_key);
+      setPhotos(item.photo_keys?.length ? item.photo_keys : item.photo_key ? [item.photo_key] : []);
       setEgiColor(item.egi_color ?? null);
     } else {
       // 正在出釣中就預設現在時間，否則預設出釣開始時間
@@ -59,7 +62,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       setWeight("");
       setFishName("");
       setNote("");
-      setPhotoKey(null);
+      setPhotos([]);
       // 新增時預設上一次用的木蝦顏色
       setEgiColor(getLastEgiColor());
     }
@@ -74,18 +77,28 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
     return t.unix();
   };
 
+  // 一次可以選多張，一張一張壓縮上傳，最多 6 張
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (!file) return;
+    if (!files.length) return;
+    const room = MAX_PHOTOS - photos.length;
+    if (files.length > room) setError(`一筆最多 ${MAX_PHOTOS} 張，只會上傳前 ${room} 張`);
+    else setError("");
+    const todo = files.slice(0, Math.max(0, room));
     setUploading(true);
-    setError("");
+    setUploadingCount(todo.length);
     try {
-      setPhotoKey(await uploadPhoto(file));
+      for (const file of todo) {
+        const key = await uploadPhoto(file);
+        setPhotos((p) => [...p, key]);
+        setUploadingCount((n) => n - 1);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setUploading(false);
+      setUploadingCount(0);
     }
   };
 
@@ -99,7 +112,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       length_cm: numOrNull(length),
       weight_g: numOrNull(weight),
       note: note || null,
-      photo_key: photoKey,
+      photo_keys: photos,
       egi_color: egiColor,
     };
     setBusy(true);
@@ -167,17 +180,33 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
           <EgiColorPicker value={egiColor} onChange={setEgiColor} />
           <TextField label="備註" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} placeholder="餌木、釣法、水深…" />
 
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
-          {photoKey ? (
-            <Box sx={{ position: "relative" }}>
-              <Box component="img" src={photoUrl(photoKey)} sx={{ width: "100%", borderRadius: 2, maxHeight: 280, objectFit: "cover" }} />
-              <IconButton size="small" onClick={() => setPhotoKey(null)} sx={{ position: "absolute", top: 8, right: 8, bgcolor: "rgba(0,0,0,0.6)" }}>
-                <CloseIcon fontSize="small" />
-              </IconButton>
+          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onFile} />
+          {photos.length > 0 && (
+            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
+              {photos.map((k, i) => (
+                <Box key={k} sx={{ position: "relative", aspectRatio: "1", borderRadius: 2, overflow: "hidden", bgcolor: "rgba(148,163,184,0.1)" }}>
+                  <Box component="img" src={photoUrl(k)} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  {i === 0 && (
+                    <Box sx={{ position: "absolute", left: 6, bottom: 6, fontSize: 10.5, fontWeight: 800, px: 0.75, py: 0.1, borderRadius: 1, bgcolor: "rgba(0,0,0,0.6)", color: "#fff" }}>封面</Box>
+                  )}
+                  <IconButton
+                    size="small" aria-label="刪除這張照片" onClick={() => setPhotos((p) => p.filter((x) => x !== k))}
+                    sx={{ position: "absolute", top: 4, right: 4, width: 26, height: 26, bgcolor: "rgba(0,0,0,0.6)", "&:hover": { bgcolor: "rgba(0,0,0,0.8)" } }}
+                  >
+                    <CloseIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Box>
+              ))}
+              {Array.from({ length: uploadingCount }, (_, i) => (
+                <Box key={`up-${i}`} sx={{ aspectRatio: "1", borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "rgba(148,163,184,0.1)" }}>
+                  <CircularProgress size={22} />
+                </Box>
+              ))}
             </Box>
-          ) : (
+          )}
+          {photos.length < MAX_PHOTOS && (
             <Button variant="outlined" startIcon={uploading ? <CircularProgress size={18} /> : <PhotoIcon />} onClick={() => fileRef.current?.click()} disabled={uploading}>
-              {uploading ? "上傳中…" : "加照片"}
+              {uploading ? "上傳中…" : photos.length ? `再加照片（${photos.length}/${MAX_PHOTOS}）` : "加照片（可一次選多張）"}
             </Button>
           )}
           {error && <Alert severity="error">{error}</Alert>}

@@ -59,6 +59,8 @@ export interface Catch {
   weight_g: number | null;
   note: string | null;
   photo_key: string | null;
+  /** 所有照片，第一張是封面 */
+  photo_keys?: string[];
   /** 木蝦顏色：red / blue / green / purple / gray / yellow / brown */
   egi_color?: string | null;
 }

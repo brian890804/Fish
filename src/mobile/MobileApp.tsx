@@ -15,7 +15,12 @@ export default function MobileApp({ tab, onTabChange }: { tab: AppTab; onTabChan
   const [openDate, setOpenDate] = useState<string | null>(null);
   return (
     <>
-      <Box sx={{ maxWidth: 640, mx: "auto", pb: "calc(72px + env(safe-area-inset-bottom))", pt: "env(safe-area-inset-top)" }}>
+      <Box
+        sx={{
+          maxWidth: 640, mx: "auto", pt: "env(safe-area-inset-top)", pb: "72px",
+          "@media (display-mode: standalone)": { pb: "calc(72px + env(safe-area-inset-bottom))" },
+        }}
+      >
         {tab === "home" && <TodayPage onOpenDate={setOpenDate} />}
         {tab === "calendar" && <CalendarPage onOpenDate={setOpenDate} />}
         {tab === "analysis" && <AnalysisPage />}
@@ -24,7 +29,11 @@ export default function MobileApp({ tab, onTabChange }: { tab: AppTab; onTabChan
       <Paper
         elevation={0}
         sx={{
-          position: "fixed", left: 0, right: 0, bottom: 0, pb: "env(safe-area-inset-bottom)", zIndex: 10, borderRadius: 0,
+          position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 10, borderRadius: 0,
+          // 只有從主畫面打開（全螢幕）才留 iPhone 底部橫條的空間；
+          // 在 Safari 裡頁面短、工具列沒收起來時，再留空間會變成一塊黑色把按鈕往上推
+          pb: 0,
+          "@media (display-mode: standalone)": { pb: "env(safe-area-inset-bottom)" },
           bgcolor: "rgba(10,15,22,0.82)", backdropFilter: "saturate(160%) blur(16px)", borderTop: "1px solid", borderColor: "divider",
         }}
       >

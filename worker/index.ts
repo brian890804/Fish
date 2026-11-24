@@ -63,6 +63,8 @@ interface CatchInput {
   weight_g?: number | null;
   note?: string | null;
   photo_key?: string | null;
+  /** 多張照片，第一張當封面 */
+  photo_keys?: string[] | null;
   egi_color?: string | null;
 }
 
@@ -78,6 +80,34 @@ function validateCatch(c: CatchInput) {
   if (c.species !== "squid" && c.species !== "fish") throw new HttpError(400, "種類只能是軟絲或魚");
   if (c.egi_color != null && !isEgiColor(c.egi_color)) throw new HttpError(400, "木蝦顏色不正確");
 }
+
+const MAX_PHOTOS = 6;
+const PHOTO_KEY_RE = /^[0-9a-f-]{36}\.[a-z0-9]+$/;
+
+/** 從資料庫的一列取出所有照片 key（舊資料只有 photo_key） */
+function photoKeysOf(row: { photo_key?: string | null; photo_keys?: string | null }): string[] {
+  if (row.photo_keys) {
+    try {
+      const v = JSON.parse(row.photo_keys);
+      if (Array.isArray(v)) return v.filter((k): k is string => typeof k === "string");
+    } catch {
+      /* 壞掉的 JSON 就退回 photo_key */
+    }
+  }
+  return row.photo_key ? [row.photo_key] : [];
+}
+
+/** 前端送來的照片清單：去重、檢查格式、最多 6 張 */
+function inputPhotoKeys(c: CatchInput): string[] {
+  const keys = c.photo_keys ?? (c.photo_key ? [c.photo_key] : []);
+  const clean = [...new Set(keys)].filter((k) => PHOTO_KEY_RE.test(k));
+  if (clean.length > MAX_PHOTOS) throw new HttpError(400, `一筆釣獲最多 ${MAX_PHOTOS} 張照片`);
+  return clean;
+}
+
+/** 回傳給前端時，photo_keys 轉成陣列 */
+const toCatch = <T extends { photo_key?: string | null; photo_keys?: string | null }>(row: T | null) =>
+  row ? { ...row, photo_keys: photoKeysOf(row) } : row;
 
 /** 釣獲時間落在出釣時段外時，把出釣時段撐開，分析才算得到 */
 async function stretchTrip(env: Env, tripId: number, t: number) {
@@ -107,7 +137,7 @@ async function dayDetail(env: Env, date: string) {
     date,
     trips: trips.map((t) => ({
       ...t,
-      catches: catches.filter((c) => c.trip_id === t.id),
+      catches: catches.filter((c) => c.trip_id === t.id).map(toCatch),
       weather: weather.filter((w) => w.spot_id === t.weather_spot_id && w.time >= hourFloor(t.start_at) - 3600 && w.time <= t.end_at + 3600),
       // 氣象署的滿／乾潮時間；前端用它判斷每筆釣獲當下的漲退潮
       tide_events: tideMap.get(t.weather_spot_id) ?? [],
@@ -221,13 +251,14 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   }
   if (seg[0] === "trips" && seg[1] && method === "DELETE") {
     const id = Number(seg[1]);
-    const { results } = await env.DB.prepare("SELECT photo_key FROM catches WHERE trip_id = ? AND photo_key IS NOT NULL")
-      .bind(id).all<{ photo_key: string }>();
+    const { results } = await env.DB.prepare("SELECT photo_key, photo_keys FROM catches WHERE trip_id = ?")
+      .bind(id).all<{ photo_key: string | null; photo_keys: string | null }>();
+    const keys = results.flatMap(photoKeysOf);
     await env.DB.batch([
       env.DB.prepare("DELETE FROM catches WHERE trip_id = ?").bind(id),
       env.DB.prepare("DELETE FROM trips WHERE id = ?").bind(id),
     ]);
-    if (results.length) ctx.waitUntil(deletePhotos(env.DB, results.map((r) => r.photo_key)));
+    if (keys.length) ctx.waitUntil(deletePhotos(env.DB, keys));
     return json({ ok: true });
   }
 
@@ -262,33 +293,39 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   if (path === "/catches" && method === "POST") {
     const c = await body<CatchInput>(req);
     validateCatch(c);
+    const keys = inputPhotoKeys(c);
     const r = await env.DB.prepare(
-      `INSERT INTO catches (trip_id, caught_at, species, fish_name, length_cm, weight_g, note, photo_key, egi_color)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+      `INSERT INTO catches (trip_id, caught_at, species, fish_name, length_cm, weight_g, note, photo_key, photo_keys, egi_color)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
     ).bind(c.trip_id, c.caught_at, c.species, c.fish_name ?? null, c.length_cm ?? null, c.weight_g ?? null,
-      c.note ?? null, c.photo_key ?? null, c.egi_color ?? null).first();
+      c.note ?? null, keys[0] ?? null, keys.length ? JSON.stringify(keys) : null, c.egi_color ?? null).first<any>();
     await stretchTrip(env, c.trip_id, c.caught_at);
-    return json(r, 201);
+    return json(toCatch(r), 201);
   }
   if (seg[0] === "catches" && seg[1] && method === "PUT") {
     const c = await body<CatchInput>(req);
     validateCatch(c);
     const id = Number(seg[1]);
-    const old = await env.DB.prepare("SELECT photo_key FROM catches WHERE id = ?").bind(id).first<{ photo_key: string | null }>();
+    const old = await env.DB.prepare("SELECT photo_key, photo_keys FROM catches WHERE id = ?").bind(id)
+      .first<{ photo_key: string | null; photo_keys: string | null }>();
     if (!old) throw new HttpError(404, "找不到釣獲");
+    const keys = inputPhotoKeys(c);
     const r = await env.DB.prepare(
-      `UPDATE catches SET caught_at = ?, species = ?, fish_name = ?, length_cm = ?, weight_g = ?, note = ?, photo_key = ?, egi_color = ?
+      `UPDATE catches SET caught_at = ?, species = ?, fish_name = ?, length_cm = ?, weight_g = ?, note = ?, photo_key = ?, photo_keys = ?, egi_color = ?
        WHERE id = ? RETURNING *`,
     ).bind(c.caught_at, c.species, c.fish_name ?? null, c.length_cm ?? null, c.weight_g ?? null, c.note ?? null,
-      c.photo_key ?? null, c.egi_color ?? null, id).first();
-    if (old.photo_key && old.photo_key !== c.photo_key) ctx.waitUntil(deletePhotos(env.DB, [old.photo_key]));
+      keys[0] ?? null, keys.length ? JSON.stringify(keys) : null, c.egi_color ?? null, id).first<any>();
+    // 編輯時拿掉的照片，從資料庫刪掉
+    const removed = photoKeysOf(old).filter((k) => !keys.includes(k));
+    if (removed.length) ctx.waitUntil(deletePhotos(env.DB, removed));
     await stretchTrip(env, c.trip_id, c.caught_at);
-    return json(r);
+    return json(toCatch(r));
   }
   if (seg[0] === "catches" && seg[1] && method === "DELETE") {
-    const r = await env.DB.prepare("DELETE FROM catches WHERE id = ? RETURNING photo_key").bind(Number(seg[1]))
-      .first<{ photo_key: string | null }>();
-    if (r?.photo_key) ctx.waitUntil(deletePhotos(env.DB, [r.photo_key]));
+    const r = await env.DB.prepare("DELETE FROM catches WHERE id = ? RETURNING photo_key, photo_keys").bind(Number(seg[1]))
+      .first<{ photo_key: string | null; photo_keys: string | null }>();
+    const keys = r ? photoKeysOf(r) : [];
+    if (keys.length) ctx.waitUntil(deletePhotos(env.DB, keys));
     return json({ ok: true });
   }
 

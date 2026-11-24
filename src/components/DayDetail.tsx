@@ -15,6 +15,7 @@ import CatchDialog from "./CatchDialog";
 import Arrow from "./Arrow";
 import { useConfirm } from "./useConfirm";
 import { EgiDot } from "./EgiColorPicker";
+import PhotoViewer from "./PhotoViewer";
 
 /** 潮汐：有氣象署的滿／乾潮時間就用它判斷（精確到分鐘），沒有才用模型的海面高度 */
 function tideAt(t: number, weather: WeatherHour[], events: TideEvent[]) {
@@ -76,8 +77,9 @@ function TripConditions({ trip }: { trip: Trip }) {
   );
 }
 
-function CatchRow({ c, trip, onClick }: { c: Catch; trip: Trip; onClick: () => void }) {
+function CatchRow({ c, trip, onClick, onPhotos }: { c: Catch; trip: Trip; onClick: () => void; onPhotos: (keys: string[]) => void }) {
   const w = conditionsAt(c.caught_at, trip.weather, trip.tide_events ?? []);
+  const photos = c.photo_keys?.length ? c.photo_keys : c.photo_key ? [c.photo_key] : [];
   return (
     <Box onClick={onClick} sx={{ display: "flex", gap: 1.5, alignItems: "center", py: 1, cursor: "pointer" }}>
       <SpeciesIcon species={c.species} sx={{ fontSize: 36 }} />
@@ -97,7 +99,21 @@ function CatchRow({ c, trip, onClick }: { c: Catch; trip: Trip; onClick: () => v
         )}
         {c.note && <Typography variant="body2" color="text.secondary" noWrap>{c.note}</Typography>}
       </Box>
-      {c.photo_key && <Box component="img" src={photoUrl(c.photo_key)} sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: "cover" }} />}
+      {photos.length > 0 && (
+        // 點縮圖看大圖（不會打開編輯）
+        <Box
+          role="button" aria-label={`看 ${photos.length} 張照片`}
+          onClick={(e) => { e.stopPropagation(); onPhotos(photos); }}
+          sx={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}
+        >
+          <Box component="img" src={photoUrl(photos[0])} alt="" sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: "cover", display: "block" }} />
+          {photos.length > 1 && (
+            <Box sx={{ position: "absolute", right: 3, bottom: 3, fontSize: 11, fontWeight: 800, px: 0.6, borderRadius: 1, bgcolor: "rgba(0,0,0,0.65)", color: "#fff", lineHeight: 1.5 }}>
+              +{photos.length - 1}
+            </Box>
+          )}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -109,6 +125,7 @@ export default function DayDetail({ date }: { date: string | null }) {
   const [tripDialog, setTripDialog] = useState<{ open: boolean; trip?: Trip | null }>({ open: false });
   const [catchDialog, setCatchDialog] = useState<{ open: boolean; trip: Trip | null; item?: Catch | null }>({ open: false, trip: null });
   const [confirmDialog, confirm] = useConfirm();
+  const [viewing, setViewing] = useState<string[] | null>(null);
 
   const refresh = () => {
     day.mutate();
@@ -175,7 +192,7 @@ export default function DayDetail({ date }: { date: string | null }) {
                     {t.note && <Typography variant="body2" sx={{ mt: 1.5 }} color="text.secondary">{t.note}</Typography>}
                     {t.catches.length > 0 && <Divider sx={{ my: 1 }} />}
                     {t.catches.map((c) => (
-                      <CatchRow key={c.id} c={c} trip={t} onClick={() => setCatchDialog({ open: true, trip: t, item: c })} />
+                      <CatchRow key={c.id} c={c} trip={t} onClick={() => setCatchDialog({ open: true, trip: t, item: c })} onPhotos={setViewing} />
                     ))}
                     <Button fullWidth variant="contained" startIcon={<AddIcon />} sx={{ mt: 1.5 }} onClick={() => setCatchDialog({ open: true, trip: t })}>
                       記錄釣獲
@@ -191,6 +208,7 @@ export default function DayDetail({ date }: { date: string | null }) {
       <TripDialog open={tripDialog.open} date={date ?? ""} trip={tripDialog.trip} onClose={() => setTripDialog({ open: false })} onSaved={refresh} />
       <CatchDialog open={catchDialog.open} trip={catchDialog.trip} item={catchDialog.item} onClose={() => setCatchDialog({ open: false, trip: null })} onSaved={refresh} />
       {confirmDialog}
+      <PhotoViewer keys={viewing} onClose={() => setViewing(null)} />
     </>
   );
 }
