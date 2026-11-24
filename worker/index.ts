@@ -7,7 +7,7 @@ import { PUSH_HOUR, describe, goodWindows, sendToAll } from "./push";
 import { twHour } from "../shared/conditions";
 import { MAX_PHOTO_BYTES, MAX_THUMB_BYTES, deletePhotos, getPhoto, putPhoto, putThumb } from "./photos";
 import { bumpVersion, cached } from "./cache";
-import { OWNER_ID, SESSION_COOKIE, checkCredentials, makeSession, readCookie, sessionCookie, verifySession } from "./auth";
+import { SESSION_COOKIE, createUser, inviteOk, loginUser, makeSession, readCookie, sessionCookie, sessionUserId, usernameOf } from "./auth";
 
 export interface Env {
   DB: D1Database;
@@ -21,6 +21,8 @@ export interface Env {
   APP_USERNAME?: string;
   APP_PASSWORD?: string;
   AUTH_SECRET?: string;
+  /** 註冊用的邀請碼（wrangler secret put INVITE_CODE）；沒設定就不開放註冊 */
+  INVITE_CODE?: string;
 }
 
 
@@ -127,17 +129,17 @@ async function stretchTrip(env: Env, tripId: number, t: number) {
 }
 
 /** 出釣是不是這個帳號的 */
-async function tripOwned(db: D1Database, tripId: number): Promise<boolean> {
-  return !!(await db.prepare("SELECT 1 AS ok FROM trips WHERE id = ? AND user_id = ?").bind(tripId, OWNER_ID).first());
+async function tripOwned(db: D1Database, uid: number, tripId: number): Promise<boolean> {
+  return !!(await db.prepare("SELECT 1 AS ok FROM trips WHERE id = ? AND user_id = ?").bind(tripId, uid).first());
 }
 
 const hhmm = (t: number) => new Date((t + 8 * 3600) * 1000).toISOString().slice(11, 16);
 
 /** 同一個帳號的另一趟出釣，跟這段時間重疊就回傳它（exceptId 是要忽略的這一趟） */
-async function overlappingTrip(db: D1Database, start: number, end: number, exceptId: number | null) {
+async function overlappingTrip(db: D1Database, uid: number, start: number, end: number, exceptId: number | null) {
   return db
     .prepare("SELECT id, start_at, end_at FROM trips WHERE user_id = ? AND start_at < ? AND end_at > ? AND id IS NOT ? LIMIT 1")
-    .bind(OWNER_ID, end, start, exceptId)
+    .bind(uid, end, start, exceptId)
     .first<{ id: number; start_at: number; end_at: number }>();
 }
 
@@ -145,19 +147,19 @@ const clashMessage = (c: { start_at: number; end_at: number }) =>
   `這段時間跟另一趟出釣重疊（${hhmm(c.start_at)} – ${hhmm(c.end_at)}）。同一段時間只能記一趟，請調整時間。`;
 
 /** 釣獲時間在出釣外面時會把出釣撐開，撐開後也不能跟別趟重疊 */
-async function assertCanStretch(db: D1Database, tripId: number, caughtAt: number) {
+async function assertCanStretch(db: D1Database, uid: number, tripId: number, caughtAt: number) {
   const trip = await db.prepare("SELECT start_at, end_at FROM trips WHERE id = ? AND user_id = ?")
-    .bind(tripId, OWNER_ID).first<{ start_at: number; end_at: number }>();
+    .bind(tripId, uid).first<{ start_at: number; end_at: number }>();
   if (!trip) throw new HttpError(404, "找不到出釣紀錄");
   const start = Math.min(trip.start_at, caughtAt);
   const end = Math.max(trip.end_at, caughtAt + 60);
   if (end - start > 24 * 3600) throw new HttpError(400, "一趟出釣最長 24 小時，這個釣獲時間會讓出釣超過 24 小時，請檢查時間。");
-  const clash = await overlappingTrip(db, start, end, tripId);
+  const clash = await overlappingTrip(db, uid, start, end, tripId);
   if (clash) throw new HttpError(400, `這個釣獲時間會讓出釣跟另一趟重疊（${hhmm(clash.start_at)} – ${hhmm(clash.end_at)}）。`);
 }
 
 /** 一天的出釣、釣獲、以及每筆釣獲當下的天氣 */
-async function dayDetail(env: Env, date: string, overnight = false) {
+async function dayDetail(env: Env, uid: number, date: string, overnight = false) {
   // overnight：也包含前一天開始、跨過這天午夜的出釣（首頁「今日釣獲」用，夜釣才看得到還在進行的那趟）
   const dayStart = twDayStart(date);
   const { results: trips } = await env.DB.prepare(
@@ -166,7 +168,7 @@ async function dayDetail(env: Env, date: string, overnight = false) {
        FROM trips t JOIN spots s ON s.id = t.spot_id
       WHERE t.user_id = ? AND (t.date = ? OR (? = 1 AND t.start_at >= ? AND t.start_at < ? AND t.end_at > ?))
       ORDER BY start_at`,
-  ).bind(date, OWNER_ID, date, overnight ? 1 : 0, dayStart - 86400, dayStart, dayStart).all<any>();
+  ).bind(date, uid, date, overnight ? 1 : 0, dayStart - 86400, dayStart, dayStart).all<any>();
   if (trips.length === 0) return { date, trips: [] };
   const ids = trips.map((t) => t.id);
   const { results: catches } = await env.DB.prepare(
@@ -196,12 +198,30 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   const seg = path.split("/").filter(Boolean);
 
   // ---- 登入（這三個不需要先登入） ----
+  // 發出登入 cookie 並回傳成功
+  const signedIn = async (id: number) => {
+    const res = json({ ok: true, username: await usernameOf(env, id) });
+    res.headers.append("set-cookie", sessionCookie(await makeSession(env, id), 400 * 86400));
+    return res;
+  };
   if (path === "/login" && method === "POST") {
     const { username = "", password = "" } = await body<{ username?: string; password?: string }>(req);
-    if (!checkCredentials(env, username, password)) throw new HttpError(401, "帳號或密碼不正確");
-    const res = json({ ok: true });
-    res.headers.append("set-cookie", sessionCookie(await makeSession(env), 400 * 86400));
-    return res;
+    const id = await loginUser(env, username.trim(), password);
+    if (!id) throw new HttpError(401, "帳號或密碼不正確");
+    return signedIn(id);
+  }
+  // 註冊：需要邀請碼（INVITE_CODE），註冊成功就直接登入
+  if (path === "/register" && method === "POST") {
+    if (!env.INVITE_CODE) throw new HttpError(403, "目前沒有開放註冊");
+    const { username = "", password = "", invite = "" } = await body<{ username?: string; password?: string; invite?: string }>(req);
+    if (!inviteOk(env, invite)) throw new HttpError(403, "邀請碼不正確");
+    const name = username.trim();
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) throw new HttpError(400, "帳號請用 3–20 個英文字母、數字或底線");
+    if (password.length < 8) throw new HttpError(400, "密碼至少要 8 個字");
+    if (env.APP_USERNAME && name.toLowerCase() === env.APP_USERNAME.toLowerCase()) throw new HttpError(409, "這個帳號已經有人用了");
+    const id = await createUser(env.DB, name, password);
+    if (!id) throw new HttpError(409, "這個帳號已經有人用了");
+    return signedIn(id);
   }
   if (path === "/logout" && method === "POST") {
     const res = json({ ok: true });
@@ -209,12 +229,15 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     return res;
   }
   if (path === "/me" && method === "GET") {
-    if (!(await verifySession(env, readCookie(req, SESSION_COOKIE)))) throw new HttpError(401, "請先登入");
-    return json({ ok: true });
+    const id = await sessionUserId(env, readCookie(req, SESSION_COOKIE));
+    if (!id) throw new HttpError(401, "請先登入");
+    return json({ ok: true, username: await usernameOf(env, id) });
   }
 
   // ---- 其餘 API（含照片）都要登入 ----
-  if (!(await verifySession(env, readCookie(req, SESSION_COOKIE)))) throw new HttpError(401, "請先登入");
+  // 目前登入的使用者 id：之後所有讀寫都只限這個帳號的資料
+  const uid = await sessionUserId(env, readCookie(req, SESSION_COOKIE));
+  if (!uid) throw new HttpError(401, "請先登入");
 
   // 照片用不可猜的 key 當檔名
   if (method === "GET" && seg[0] === "photos" && seg[1]) {
@@ -296,14 +319,14 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
               SUM(CASE WHEN c.species = 'fish' THEN 1 ELSE 0 END) AS fish
          FROM trips t LEFT JOIN catches c ON c.trip_id = t.id
         WHERE t.user_id = ? AND t.date LIKE ? GROUP BY t.date`,
-    ).bind(OWNER_ID, `${month}-%`).all();
+    ).bind(uid, `${month}-%`).all();
     return json(results);
   }
 
   if (path === "/day" && method === "GET") {
     const date = url.searchParams.get("date");
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, "日期格式錯誤");
-    return json(await dayDetail(env, date, url.searchParams.get("overnight") === "1"));
+    return json(await dayDetail(env, uid, date, url.searchParams.get("overnight") === "1"));
   }
 
   // ---- 出釣 ----
@@ -311,11 +334,11 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const t = await body<TripInput>(req);
     validateTrip(t);
     const spot = await getSpot(env, t.spot_id);
-    const clash = await overlappingTrip(env.DB, t.start_at, t.end_at, null);
+    const clash = await overlappingTrip(env.DB, uid, t.start_at, t.end_at, null);
     if (clash) throw new HttpError(400, clashMessage(clash));
     const r = await env.DB.prepare(
       "INSERT INTO trips (user_id, spot_id, date, start_at, end_at, note) VALUES (?, ?, ?, ?, ?, ?) RETURNING *",
-    ).bind(OWNER_ID, spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null).first();
+    ).bind(uid, spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null).first();
     await ensureWeather(env.DB, await weatherSpotOf(env, spot), t.start_at, t.end_at).catch((e) => console.error("補抓天氣失敗", e));
     return json(r, 201);
   }
@@ -323,18 +346,18 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const t = await body<TripInput>(req);
     validateTrip(t);
     const spot = await getSpot(env, t.spot_id);
-    const clash = await overlappingTrip(env.DB, t.start_at, t.end_at, Number(seg[1]));
+    const clash = await overlappingTrip(env.DB, uid, t.start_at, t.end_at, Number(seg[1]));
     if (clash) throw new HttpError(400, clashMessage(clash));
     const r = await env.DB.prepare(
       "UPDATE trips SET spot_id = ?, date = ?, start_at = ?, end_at = ?, note = ? WHERE id = ? AND user_id = ? RETURNING *",
-    ).bind(spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null, Number(seg[1]), OWNER_ID).first();
+    ).bind(spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null, Number(seg[1]), uid).first();
     if (!r) throw new HttpError(404, "找不到出釣紀錄");
     await ensureWeather(env.DB, await weatherSpotOf(env, spot), t.start_at, t.end_at).catch((e) => console.error("補抓天氣失敗", e));
     return json(r);
   }
   if (seg[0] === "trips" && seg[1] && method === "DELETE") {
     const id = Number(seg[1]);
-    if (!(await tripOwned(env.DB, id))) throw new HttpError(404, "找不到出釣紀錄");
+    if (!(await tripOwned(env.DB, uid, id))) throw new HttpError(404, "找不到出釣紀錄");
     const { results } = await env.DB.prepare("SELECT photo_key, photo_keys FROM catches WHERE trip_id = ?")
       .bind(id).all<{ photo_key: string | null; photo_keys: string | null }>();
     const keys = results.flatMap(photoKeysOf);
@@ -351,7 +374,7 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const c = await body<CatchInput>(req);
     validateCatch(c);
     const keys = inputPhotoKeys(c);
-    await assertCanStretch(env.DB, c.trip_id, c.caught_at);
+    await assertCanStretch(env.DB, uid, c.trip_id, c.caught_at);
     const r = await env.DB.prepare(
       `INSERT INTO catches (trip_id, caught_at, species, fish_name, length_cm, weight_g, note, photo_key, photo_keys, egi_color, water_color)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
@@ -366,9 +389,9 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const id = Number(seg[1]);
     const old = await env.DB.prepare(
       "SELECT c.photo_key, c.photo_keys FROM catches c JOIN trips t ON t.id = c.trip_id WHERE c.id = ? AND t.user_id = ?",
-    ).bind(id, OWNER_ID).first<{ photo_key: string | null; photo_keys: string | null }>();
+    ).bind(id, uid).first<{ photo_key: string | null; photo_keys: string | null }>();
     if (!old) throw new HttpError(404, "找不到釣獲");
-    await assertCanStretch(env.DB, c.trip_id, c.caught_at);
+    await assertCanStretch(env.DB, uid, c.trip_id, c.caught_at);
     const keys = inputPhotoKeys(c);
     const r = await env.DB.prepare(
       `UPDATE catches SET caught_at = ?, species = ?, fish_name = ?, length_cm = ?, weight_g = ?, note = ?, photo_key = ?, photo_keys = ?, egi_color = ?, water_color = ?
@@ -384,7 +407,7 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   if (seg[0] === "catches" && seg[1] && method === "DELETE") {
     const r = await env.DB.prepare(
       "DELETE FROM catches WHERE id = ? AND trip_id IN (SELECT id FROM trips WHERE user_id = ?) RETURNING photo_key, photo_keys",
-    ).bind(Number(seg[1]), OWNER_ID)
+    ).bind(Number(seg[1]), uid)
       .first<{ photo_key: string | null; photo_keys: string | null }>();
     const keys = r ? photoKeysOf(r) : [];
     if (keys.length) ctx.waitUntil(deletePhotos(env.DB, keys));
@@ -412,8 +435,8 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const species = (url.searchParams.get("species") ?? "squid") as Species;
     const today = twDate(Date.now() / 1000);
     // 評分用所有共用這個天氣來源的釣點的紀錄
-    const history = await cached(env.DB, `u${OWNER_ID}:history:${spot.id}:${species}`, () =>
-      analyze(env.DB, { userId: OWNER_ID, from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species }),
+    const history = await cached(env.DB, `u${uid}:history:${spot.id}:${species}`, () =>
+      analyze(env.DB, { userId: uid, from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species }),
     );
     const from = twDayStart(today);
     const hours = await forecast(env.DB, spot.id, from, from + days * 86400 - 3600, history);
@@ -429,8 +452,8 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const to = url.searchParams.get("to") ?? "2999-12-31";
     const spotId = Number(url.searchParams.get("spot")) || null;
     const species = (url.searchParams.get("species") ?? "squid") as Species;
-    return json(await cached(env.DB, `u${OWNER_ID}:analysis:${from}:${to}:${spotId}:${species}`, () =>
-      analyze(env.DB, { userId: OWNER_ID, from, to, spotId, species }),
+    return json(await cached(env.DB, `u${uid}:analysis:${from}:${to}:${spotId}:${species}`, () =>
+      analyze(env.DB, { userId: uid, from, to, spotId, species }),
     ));
   }
 
@@ -442,7 +465,7 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
          FROM catches c JOIN trips t ON t.id = c.trip_id JOIN spots s ON s.id = t.spot_id
         WHERE t.user_id = ? AND c.species = ? AND c.length_cm IS NOT NULL
         ORDER BY c.length_cm DESC, c.caught_at LIMIT 5`,
-    ).bind(OWNER_ID, species).all();
+    ).bind(uid, species).all();
     const { results: months } = await env.DB.prepare(
       `SELECT substr(t.date, 1, 7) AS month,
               COUNT(*) AS catches,
@@ -452,11 +475,11 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
          FROM catches c JOIN trips t ON t.id = c.trip_id
         WHERE t.user_id = ? AND c.species = ?
         GROUP BY month ORDER BY month`,
-    ).bind(OWNER_ID, species).all();
+    ).bind(uid, species).all();
     // 每月出釣次數（含槓龜），用來看每次平均釣幾隻
     const { results: tripsByMonth } = await env.DB.prepare(
       "SELECT substr(date, 1, 7) AS month, COUNT(*) AS trips FROM trips WHERE user_id = ? GROUP BY month",
-    ).bind(OWNER_ID).all<{ month: string; trips: number }>();
+    ).bind(uid).all<{ month: string; trips: number }>();
     const tripMap = new Map(tripsByMonth.map((r) => [r.month, r.trips]));
     return json({
       species,
@@ -476,20 +499,20 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     await env.DB.prepare(
       `INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_id) VALUES (?, ?, ?, ?)
        ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth, user_id = excluded.user_id`,
-    ).bind(subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, OWNER_ID).run();
+    ).bind(subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, uid).run();
     return json({ ok: true });
   }
   if (path === "/push/unsubscribe" && method === "POST") {
     const { endpoint } = await body<{ endpoint: string }>(req);
-    await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?").bind(endpoint ?? "", OWNER_ID).run();
+    await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?").bind(endpoint ?? "", uid).run();
     return json({ ok: true });
   }
   // 預覽：現在檢查的話，會通知什麼（不會真的送出）
   if (path === "/push/preview" && method === "GET") {
-    return json(await planPush(env));
+    return json(await planPush(env, uid));
   }
   if (path === "/push/test" && method === "POST") {
-    return json(await sendToAll(env, { title: "🦑 推播測試", body: "收得到這則通知，代表好時段推播設定成功了。" }));
+    return json(await sendToAll(env, { title: "🦑 推播測試", body: "收得到這則通知，代表好時段推播設定成功了。" }, uid));
   }
 
   if (path === "/refresh" && method === "POST") {
@@ -500,11 +523,11 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
 }
 
 /** 看接下來 24 小時有沒有好時段 */
-async function planPush(env: Env) {
+async function planPush(env: Env, uid: number) {
   const now = Math.floor(Date.now() / 1000);
   const spot = await weatherSpotOf(env, await getSpot(env, null));
-  const history = await cached(env.DB, `u${OWNER_ID}:history:${spot.id}:squid`, () =>
-    analyze(env.DB, { userId: OWNER_ID, from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species: "squid" }),
+  const history = await cached(env.DB, `u${uid}:history:${spot.id}:squid`, () =>
+    analyze(env.DB, { userId: uid, from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species: "squid" }),
   );
   const start = hourFloor(now) + 3600;
   const hours = await forecast(env.DB, spot.id, start, start + 24 * 3600, history);
@@ -523,11 +546,17 @@ async function dailyPush(env: Env) {
   // 先佔位，避免同一個小時內的排程重複通知
   const claim = await env.DB.prepare("INSERT INTO push_sent (day, sent_at) VALUES (?, ?) ON CONFLICT(day) DO NOTHING").bind(day, now).run();
   if (!claim.meta.changes) return;
-  const plan = await planPush(env);
-  if (!plan.message) return;
-  const r = await sendToAll(env, plan.message);
-  await env.DB.prepare("UPDATE push_sent SET message = ? WHERE day = ?").bind(`${plan.message.title}｜${JSON.stringify(r)}`, day).run();
-  console.log("好時段推播", JSON.stringify({ ...plan.message, ...r }));
+  // 每位開啟過通知的使用者，各自用自己的歷史資料判斷、各自收到
+  const { results: users } = await env.DB.prepare("SELECT DISTINCT user_id AS id FROM push_subscriptions").all<{ id: number }>();
+  const lines: string[] = [];
+  for (const { id } of users) {
+    const plan = await planPush(env, id);
+    if (!plan.message) continue;
+    const r = await sendToAll(env, plan.message, id);
+    lines.push(`${plan.message.title}｜${JSON.stringify(r)}`);
+    console.log("好時段推播", JSON.stringify({ user: id, ...plan.message, ...r }));
+  }
+  if (lines.length) await env.DB.prepare("UPDATE push_sent SET message = ? WHERE day = ?").bind(lines.join("\n"), day).run();
 }
 
 async function refreshAll(env: Env) {

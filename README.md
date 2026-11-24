@@ -4,7 +4,7 @@
 
 **正式網址：https://fishing.weather-push-worker.workers.dev**
 
-> 沒有登入：知道網址的人都能看到並修改資料，網址不要公開分享。
+> 需要帳號密碼登入。站主用 `APP_USERNAME`／`APP_PASSWORD`；其他人用邀請碼（`INVITE_CODE`）在登入頁註冊，每個帳號的出釣、釣獲、照片只有自己看得到。
 
 ---
 
@@ -225,6 +225,7 @@ push 到 `main` 會自動執行 `.github/workflows/deploy.yml`：
 | 同上 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 帳號 ID |
 | Cloudflare Worker secret | `CWA_API_KEY` | 中央氣象署開放資料金鑰，抓潮汐預報用。設定方式：`npx wrangler secret put CWA_API_KEY` |
 | Cloudflare Worker secret | `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY` | 推播金鑰，執行 `node scripts/setup-push.mjs` 自動產生並設定 |
+| Cloudflare Worker secret | `INVITE_CODE` | 註冊用的邀請碼，給要加入的人。沒設定就不開放註冊。設定方式：`npx wrangler secret put INVITE_CODE` |
 
 金鑰都不放在程式碼或 repo 裡。
 
@@ -289,7 +290,7 @@ scripts/
 - **潮汐預報是「新北市瑞芳區」**，跟水湳洞距離很近但不是同一點，時間可能有幾分鐘差異。
 - **溫古魯沒有歷史資料**：App 上線（2026-11-24）之前或補記的紀錄，天氣都來自 Open-Meteo。2026-11-23 那筆的潮汐是用氣象署觀測站實測值回填的。
 - **溫古魯內部 API 可能改版**，屆時會自動改用 Open-Meteo。
-- **沒有登入**，網址不要公開。
+- **登入的 cookie 換掉 `AUTH_SECRET` 就會全部失效**，所有裝置要重新登入一次。
 
 ## 資料庫怎麼存
 
@@ -298,7 +299,7 @@ scripts/
 | 類型 | 資料表 | 說明 |
 |---|---|---|
 | **共用** | `weather_hourly`、`tide_events`、`spots` | 天氣與潮汐只由排程抓一次，所有人讀同一份；App 不會每個人各自去打氣象的 API |
-| **個人**（帳號） | `trips`（有 `user_id`）、`catches`、`photos`、`push_subscriptions` | 釣獲透過出釣、照片透過釣獲歸屬帳號；所有讀寫都會帶上帳號 |
+| **個人**（帳號） | `users`、`trips`（有 `user_id`）、`catches`、`photos`、`push_subscriptions` | `users` 存註冊的帳號（密碼只存 PBKDF2 雜湊，id 1 是站主）；釣獲透過出釣、照片透過釣獲歸屬帳號；所有讀寫都會帶上登入者的 id |
 | **快取** | `analysis_cache`、`data_version` | 分析結果快取，出釣／釣獲有變動才重算 |
 
 另外，App 會把最後一次的預報與紀錄存在手機（localStorage），離線時仍可看到上次的資料。

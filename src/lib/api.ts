@@ -87,6 +87,12 @@ export async function login(username: string, password: string) {
   setAuthFlag(true);
 }
 
+/** 註冊新帳號（需要邀請碼）；成功後直接登入 */
+export async function register(username: string, password: string, invite: string) {
+  await post("/register", { username, password, invite });
+  setAuthFlag(true);
+}
+
 export async function logout() {
   try {
     await post("/logout", {});
