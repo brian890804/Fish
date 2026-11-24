@@ -11,7 +11,7 @@
 | 前端 | React 19 + MUI 9 + SWR，Vite 打包 |
 | API／排程 | Cloudflare Worker（`worker/`），同一個 Worker 也負責提供前端靜態檔 |
 | 資料庫 | Cloudflare D1（SQLite），schema 在 `migrations/` |
-| 照片 | Cloudflare R2，上傳前在手機端縮到 1600px |
+| 照片 | 存在 D1 的 `photos` 表（不用 R2，免綁卡），上傳前在手機端縮到 1600px，單張上限約 1.5MB |
 | 共用邏輯 | `shared/conditions.ts`：月相、潮汐判斷、分析分組、評分 |
 
 ### 天氣資料
@@ -42,16 +42,14 @@ pnpm dev       # 前端，/api 代理到 :8787
 
 ## 部署到 Cloudflare
 
-1. 在 Cloudflare 後台開通 **R2**（第一次使用要在 Dashboard → R2 按啟用，免費額度 10GB）。
-2. 建立資源：
+1. 建立資源（已建立過就跳過）：
 
    ```bash
    npx wrangler d1 create fish-db        # 把輸出的 database_id 填進 wrangler.toml
-   npx wrangler r2 bucket create fish-photos
    pnpm db:migrate:remote
    ```
 
-3. 手動部署：`pnpm deploy`，網址是 `https://fish-log.<你的子網域>.workers.dev`。
+2. 手動部署：`pnpm deploy`，網址是 `https://fish-log.<你的子網域>.workers.dev`。
 
 ### 自動部署（GitHub Actions）
 

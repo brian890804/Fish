@@ -26,8 +26,16 @@ export function useApi<T>(path: string | null, config?: SWRConfiguration) {
 }
 
 /** 上傳前先在手機上縮圖，省流量也省空間 */
+const MAX_UPLOAD_BYTES = 1_500_000;
+
 export async function uploadPhoto(file: File): Promise<string> {
-  const blob = await resizeImage(file, 1600, 0.82);
+  // 照片存在 D1（單筆上限約 2MB），太大就逐步縮小
+  let blob = await resizeImage(file, 1600, 0.82);
+  for (const [side, q] of [[1280, 0.75], [1024, 0.7], [800, 0.65]] as const) {
+    if (blob.size <= MAX_UPLOAD_BYTES) break;
+    blob = await resizeImage(file, side, q);
+  }
+  if (blob.size > MAX_UPLOAD_BYTES) throw new ApiError(413, "照片太大，換一張試試");
   const res = await fetch("/api/photos", {
     method: "POST",
     headers: { "content-type": blob.type },

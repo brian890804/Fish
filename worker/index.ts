@@ -1,10 +1,10 @@
 import { hourFloor, twDate, twDayStart } from "../shared/conditions";
 import { analyze, forecast, type Species } from "./analysis";
 import { ensureWeather, refreshSpot, type Spot } from "./weather";
+import { MAX_PHOTO_BYTES, deletePhotos, getPhoto, putPhoto } from "./photos";
 
 export interface Env {
   DB: D1Database;
-  PHOTOS: R2Bucket;
   ASSETS: Fetcher;
 }
 
@@ -102,11 +102,11 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
 
   // 照片用不可猜的 key 當檔名
   if (method === "GET" && seg[0] === "photos" && seg[1]) {
-    const obj = await env.PHOTOS.get(seg[1]);
-    if (!obj) return new Response("not found", { status: 404 });
-    return new Response(obj.body, {
+    const photo = await getPhoto(env.DB, seg[1]);
+    if (!photo) return new Response("not found", { status: 404 });
+    return new Response(photo.bytes, {
       headers: {
-        "content-type": obj.httpMetadata?.contentType ?? "image/jpeg",
+        "content-type": photo.contentType,
         "cache-control": "public, max-age=31536000, immutable",
       },
     });
@@ -186,7 +186,7 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
       env.DB.prepare("DELETE FROM catches WHERE trip_id = ?").bind(id),
       env.DB.prepare("DELETE FROM trips WHERE id = ?").bind(id),
     ]);
-    if (results.length) ctx.waitUntil(env.PHOTOS.delete(results.map((r) => r.photo_key)));
+    if (results.length) ctx.waitUntil(deletePhotos(env.DB, results.map((r) => r.photo_key)));
     return json({ ok: true });
   }
 
@@ -213,14 +213,14 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
        WHERE id = ? RETURNING *`,
     ).bind(c.caught_at, c.species, c.fish_name ?? null, c.length_cm ?? null, c.weight_g ?? null, c.note ?? null,
       c.photo_key ?? null, id).first();
-    if (old.photo_key && old.photo_key !== c.photo_key) ctx.waitUntil(env.PHOTOS.delete(old.photo_key));
+    if (old.photo_key && old.photo_key !== c.photo_key) ctx.waitUntil(deletePhotos(env.DB, [old.photo_key]));
     await stretchTrip(env, c.trip_id, c.caught_at);
     return json(r);
   }
   if (seg[0] === "catches" && seg[1] && method === "DELETE") {
     const r = await env.DB.prepare("DELETE FROM catches WHERE id = ? RETURNING photo_key").bind(Number(seg[1]))
       .first<{ photo_key: string | null }>();
-    if (r?.photo_key) ctx.waitUntil(env.PHOTOS.delete(r.photo_key));
+    if (r?.photo_key) ctx.waitUntil(deletePhotos(env.DB, [r.photo_key]));
     return json({ ok: true });
   }
 
@@ -228,11 +228,13 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   if (path === "/photos" && method === "POST") {
     const type = req.headers.get("content-type") ?? "";
     if (!type.startsWith("image/")) throw new HttpError(400, "只能上傳圖片");
-    const size = Number(req.headers.get("content-length") ?? 0);
-    if (size > 10 * 1024 * 1024) throw new HttpError(413, "圖片太大（上限 10MB）");
-    const ext = type.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+    if (Number(req.headers.get("content-length") ?? 0) > MAX_PHOTO_BYTES) throw new HttpError(413, "圖片太大（上限約 1.8MB）");
+    const data = await req.arrayBuffer();
+    if (data.byteLength === 0) throw new HttpError(400, "圖片是空的");
+    if (data.byteLength > MAX_PHOTO_BYTES) throw new HttpError(413, "圖片太大（上限約 1.8MB）");
+    const ext = type.split("/")[1]?.replace("jpeg", "jpg").replace(/\+.*$/, "") ?? "jpg";
     const key = `${crypto.randomUUID()}.${ext}`;
-    await env.PHOTOS.put(key, req.body, { httpMetadata: { contentType: type } });
+    await putPhoto(env.DB, key, type, data);
     return json({ key }, 201);
   }
 
