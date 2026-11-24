@@ -1,0 +1,4 @@
+# pnpm 12 預設不執行套件的建置腳本，CI 會直接報錯；這兩個是 Vite／wrangler 需要的
+allowBuilds:
+  esbuild: true
+  workerd: true
