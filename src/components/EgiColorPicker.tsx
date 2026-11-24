@@ -3,25 +3,6 @@ import CheckIcon from "@mui/icons-material/CheckRounded";
 import { EGI_COLORS, egiOf } from "../../shared/egi";
 import { TEXT } from "../theme";
 
-const LAST_KEY = "fish.lastEgiColor";
-
-/** 上一次用的木蝦顏色（記錄新釣獲時當預設） */
-export function getLastEgiColor(): string | null {
-  try {
-    return localStorage.getItem(LAST_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function setLastEgiColor(v: string | null) {
-  try {
-    if (v) localStorage.setItem(LAST_KEY, v);
-  } catch {
-    /* 私密瀏覽等情況存不進去就算了 */
-  }
-}
-
 /** 一排色點，點一下選、再點一次取消；不顯示文字 */
 export default function EgiColorPicker({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   return (

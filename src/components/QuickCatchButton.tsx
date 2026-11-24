@@ -6,7 +6,6 @@ import { post } from "../lib/api";
 import { getPosition, nearestSpot } from "../lib/geo";
 import { useSpots } from "../hooks/useSpots";
 import { egiOf } from "../../shared/egi";
-import { getLastEgiColor } from "./EgiColorPicker";
 import { SquidIcon } from "./icons";
 
 interface Result {
@@ -19,7 +18,7 @@ interface Result {
 }
 
 /**
- * 快速記一隻：一按就記「現在、軟絲、上次用的木蝦顏色」，
+ * 快速記一隻：一按就記「現在、軟絲」，木蝦顏色不自動帶，
  * 釣點用定位找最近的，找不到就用預設釣點；胴長、照片之後再補。
  */
 export default function QuickCatchButton({ onOpenDate, compact = false }: { onOpenDate: (d: string) => void; compact?: boolean }) {
@@ -36,13 +35,11 @@ export default function QuickCatchButton({ onOpenDate, compact = false }: { onOp
     try {
       const pos = await getPosition(5000);
       const near = pos && spots.data ? nearestSpot(spots.data, pos) : null;
-      const egi = getLastEgiColor();
       const r = await post<{ spot: { name: string }; trip_created: boolean; catch: { caught_at: number }; date: string }>("/quick-catch", {
         spot_id: near?.spot.id,
-        egi_color: egi,
       });
       if ("vibrate" in navigator) navigator.vibrate?.(60);
-      setResult({ spotName: r.spot.name, time: r.catch.caught_at, egi, newTrip: r.trip_created, located: !!near, date: r.date });
+      setResult({ spotName: r.spot.name, time: r.catch.caught_at, egi: null, newTrip: r.trip_created, located: !!near, date: r.date });
       mutate((k) => typeof k === "string" && (k.startsWith("/day") || k.startsWith("/calendar") || k.startsWith("/analysis") || k.startsWith("/forecast")));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -72,7 +69,7 @@ export default function QuickCatchButton({ onOpenDate, compact = false }: { onOp
         </Box>
         <Box sx={{ textAlign: "left" }}>
           <Typography sx={{ fontSize: compact ? 18 : 21, fontWeight: 900, color: "#fff", lineHeight: 1.2 }}>快速記一隻</Typography>
-          <Typography sx={{ fontSize: 12.5, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>現在・軟絲・上次的木蝦顏色</Typography>
+          <Typography sx={{ fontSize: 12.5, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>現在・軟絲，其他之後再補</Typography>
         </Box>
       </ButtonBase>
 

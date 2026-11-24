@@ -9,7 +9,7 @@ import dayjs from "dayjs";
 import { del, photoUrl, post, put, uploadPhoto } from "../lib/api";
 import type { Catch, Species, Trip } from "../lib/types";
 import { SpeciesIcon } from "./icons";
-import EgiColorPicker, { getLastEgiColor, setLastEgiColor } from "./EgiColorPicker";
+import EgiColorPicker from "./EgiColorPicker";
 import { useConfirm } from "./useConfirm";
 
 interface Props {
@@ -21,6 +21,7 @@ interface Props {
 }
 
 const MAX_PHOTOS = 6;
+const PHOTO_TYPES = "image/jpeg,image/png,image/heic,image/heif,image/webp";
 
 const numOrNull = (s: string) => (s.trim() === "" || !Number.isFinite(Number(s)) ? null : Number(s));
 
@@ -63,8 +64,8 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       setFishName("");
       setNote("");
       setPhotos([]);
-      // 新增時預設上一次用的木蝦顏色
-      setEgiColor(getLastEgiColor());
+      // 木蝦顏色預設不選（常常會忘記用了哪支，不要自動帶）
+      setEgiColor(null);
     }
   }, [open, item, trip]);
 
@@ -120,7 +121,6 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
     try {
       if (item) await put(`/catches/${item.id}`, payload);
       else await post("/catches", payload);
-      setLastEgiColor(egiColor);
       onSaved();
       onClose();
     } catch (err) {
@@ -180,7 +180,8 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
           <EgiColorPicker value={egiColor} onChange={setEgiColor} />
           <TextField label="備註" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} placeholder="餌木、釣法、水深…" />
 
-          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onFile} />
+          {/* 限定照片格式（不用 image/*），Android 會直接開相簿；iPhone 的選單由 Safari 決定，第一個是「照片圖庫」 */}
+          <input ref={fileRef} type="file" accept={PHOTO_TYPES} multiple hidden onChange={onFile} />
           {photos.length > 0 && (
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1 }}>
               {photos.map((k, i) => (
