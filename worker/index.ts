@@ -2,6 +2,7 @@ import { hourFloor, twDate, twDayStart } from "../shared/conditions";
 import { analyze, forecast, type Species } from "./analysis";
 import { ensureWeather, refreshSpot, type Spot } from "./weather";
 import { loadTideEvents, refreshTide } from "./tide";
+import { isEgiColor } from "../shared/egi";
 import { MAX_PHOTO_BYTES, deletePhotos, getPhoto, putPhoto } from "./photos";
 
 export interface Env {
@@ -57,6 +58,7 @@ interface CatchInput {
   weight_g?: number | null;
   note?: string | null;
   photo_key?: string | null;
+  egi_color?: string | null;
 }
 
 function validateTrip(t: TripInput) {
@@ -69,6 +71,7 @@ function validateCatch(c: CatchInput) {
   if (!Number.isFinite(c.trip_id)) throw new HttpError(400, "缺少出釣紀錄");
   if (!Number.isFinite(c.caught_at)) throw new HttpError(400, "缺少釣到的時間");
   if (c.species !== "squid" && c.species !== "fish") throw new HttpError(400, "種類只能是軟絲或魚");
+  if (c.egi_color != null && !isEgiColor(c.egi_color)) throw new HttpError(400, "木蝦顏色不正確");
 }
 
 /** 釣獲時間落在出釣時段外時，把出釣時段撐開，分析才算得到 */
@@ -228,10 +231,10 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const c = await body<CatchInput>(req);
     validateCatch(c);
     const r = await env.DB.prepare(
-      `INSERT INTO catches (trip_id, caught_at, species, fish_name, length_cm, weight_g, note, photo_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+      `INSERT INTO catches (trip_id, caught_at, species, fish_name, length_cm, weight_g, note, photo_key, egi_color)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
     ).bind(c.trip_id, c.caught_at, c.species, c.fish_name ?? null, c.length_cm ?? null, c.weight_g ?? null,
-      c.note ?? null, c.photo_key ?? null).first();
+      c.note ?? null, c.photo_key ?? null, c.egi_color ?? null).first();
     await stretchTrip(env, c.trip_id, c.caught_at);
     return json(r, 201);
   }
@@ -242,10 +245,10 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const old = await env.DB.prepare("SELECT photo_key FROM catches WHERE id = ?").bind(id).first<{ photo_key: string | null }>();
     if (!old) throw new HttpError(404, "找不到釣獲");
     const r = await env.DB.prepare(
-      `UPDATE catches SET caught_at = ?, species = ?, fish_name = ?, length_cm = ?, weight_g = ?, note = ?, photo_key = ?
+      `UPDATE catches SET caught_at = ?, species = ?, fish_name = ?, length_cm = ?, weight_g = ?, note = ?, photo_key = ?, egi_color = ?
        WHERE id = ? RETURNING *`,
     ).bind(c.caught_at, c.species, c.fish_name ?? null, c.length_cm ?? null, c.weight_g ?? null, c.note ?? null,
-      c.photo_key ?? null, id).first();
+      c.photo_key ?? null, c.egi_color ?? null, id).first();
     if (old.photo_key && old.photo_key !== c.photo_key) ctx.waitUntil(deletePhotos(env.DB, [old.photo_key]));
     await stretchTrip(env, c.trip_id, c.caught_at);
     return json(r);

@@ -3,6 +3,7 @@ import { useAnalysis } from "../hooks/useAnalysis";
 import AnalysisFilters from "../components/analysis/AnalysisFilters";
 import SummaryTiles from "../components/analysis/SummaryTiles";
 import Highlights from "../components/analysis/Highlights";
+import EgiCard from "../components/analysis/EgiCard";
 import FactorCard, { SCORE_HELP } from "../components/analysis/FactorCard";
 import PageHeader from "./PageHeader";
 
@@ -29,6 +30,7 @@ export default function AnalysisPage() {
           <Highlights items={a.highlights} />
           <Typography variant="body2" color="text.secondary">{SCORE_HELP}</Typography>
           <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 2.5 }}>
+            <EgiCard data={data} />
             {data.factors.filter((f) => f.buckets.length > 0).map((f) => <FactorCard key={f.key} f={f} />)}
           </Box>
         </Box>

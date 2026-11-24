@@ -9,6 +9,7 @@ import dayjs from "dayjs";
 import { del, photoUrl, post, put, uploadPhoto } from "../lib/api";
 import type { Catch, Species, Trip } from "../lib/types";
 import { SpeciesIcon } from "./icons";
+import EgiColorPicker, { getLastEgiColor, setLastEgiColor } from "./EgiColorPicker";
 import { useConfirm } from "./useConfirm";
 
 interface Props {
@@ -29,6 +30,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
   const [fishName, setFishName] = useState("");
   const [note, setNote] = useState("");
   const [photoKey, setPhotoKey] = useState<string | null>(null);
+  const [egiColor, setEgiColor] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -46,6 +48,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       setFishName(item.fish_name ?? "");
       setNote(item.note ?? "");
       setPhotoKey(item.photo_key);
+      setEgiColor(item.egi_color ?? null);
     } else {
       // 正在出釣中就預設現在時間，否則預設出釣開始時間
       const now = dayjs().unix();
@@ -57,6 +60,8 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       setFishName("");
       setNote("");
       setPhotoKey(null);
+      // 新增時預設上一次用的木蝦顏色
+      setEgiColor(getLastEgiColor());
     }
   }, [open, item, trip]);
 
@@ -95,12 +100,14 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
       weight_g: numOrNull(weight),
       note: note || null,
       photo_key: photoKey,
+      egi_color: egiColor,
     };
     setBusy(true);
     setError("");
     try {
       if (item) await put(`/catches/${item.id}`, payload);
       else await post("/catches", payload);
+      setLastEgiColor(egiColor);
       onSaved();
       onClose();
     } catch (err) {
@@ -157,6 +164,7 @@ export default function CatchDialog({ open, trip, item, onClose, onSaved }: Prop
               helperText="選填"
             />
           </Box>
+          <EgiColorPicker value={egiColor} onChange={setEgiColor} />
           <TextField label="備註" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} placeholder="餌木、釣法、水深…" />
 
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />

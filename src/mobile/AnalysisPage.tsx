@@ -3,6 +3,7 @@ import { useAnalysis } from "../hooks/useAnalysis";
 import AnalysisFilters from "../components/analysis/AnalysisFilters";
 import SummaryTiles from "../components/analysis/SummaryTiles";
 import Highlights from "../components/analysis/Highlights";
+import EgiCard from "../components/analysis/EgiCard";
 import FactorCard, { SCORE_HELP } from "../components/analysis/FactorCard";
 
 export default function AnalysisPage() {
@@ -22,6 +23,7 @@ export default function AnalysisPage() {
           <SummaryTiles data={data} squidMode={a.species === "squid"} />
           {data.missingWeatherHours > 0 && <Alert severity="warning">有 {data.missingWeatherHours} 小時找不到天氣資料，沒算進條件分析。</Alert>}
           <Highlights items={a.highlights} />
+          <EgiCard data={data} />
           <Typography variant="caption" color="text.secondary">{SCORE_HELP}</Typography>
           {data.factors.filter((f) => f.buckets.length > 0).map((f) => <FactorCard key={f.key} f={f} />)}
         </>

@@ -58,6 +58,8 @@ export interface Catch {
   weight_g: number | null;
   note: string | null;
   photo_key: string | null;
+  /** 木蝦顏色：red / blue / green / purple / gray / yellow / brown */
+  egi_color?: string | null;
 }
 
 export interface Trip {
@@ -97,6 +99,7 @@ export interface Analysis {
   rate: number;
   avgLengthCm: number | null;
   maxLengthCm: number | null;
+  egiColors: { color: string; catches: number; avgLengthCm: number | null }[];
   blankTrips: number;
   missingWeatherHours: number;
   factors: FactorStat[];

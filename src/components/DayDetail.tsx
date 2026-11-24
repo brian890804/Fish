@@ -14,6 +14,7 @@ import TripDialog from "./TripDialog";
 import CatchDialog from "./CatchDialog";
 import Arrow from "./Arrow";
 import { useConfirm } from "./useConfirm";
+import { EgiDot } from "./EgiColorPicker";
 
 /** 潮汐：有氣象署的滿／乾潮時間就用它判斷（精確到分鐘），沒有才用模型的海面高度 */
 function tideAt(t: number, weather: WeatherHour[], events: TideEvent[]) {
@@ -81,11 +82,14 @@ function CatchRow({ c, trip, onClick }: { c: Catch; trip: Trip; onClick: () => v
     <Box onClick={onClick} sx={{ display: "flex", gap: 1.5, alignItems: "center", py: 1, cursor: "pointer" }}>
       <SpeciesIcon species={c.species} sx={{ fontSize: 36 }} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700 }}>
-          {hm(c.caught_at)} · {c.species === "fish" ? c.fish_name || "魚" : SPECIES_LABEL[c.species]}
-          {c.length_cm != null && ` · ${c.length_cm}cm`}
-          {c.weight_g != null && ` · ${c.weight_g}g`}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+          <Typography sx={{ fontWeight: 700 }}>
+            {hm(c.caught_at)} · {c.species === "fish" ? c.fish_name || "魚" : SPECIES_LABEL[c.species]}
+            {c.length_cm != null && ` · ${c.length_cm}cm`}
+            {c.weight_g != null && ` · ${c.weight_g}g`}
+          </Typography>
+          <EgiDot color={c.egi_color} size={11} />
+        </Box>
         {w && (
           <Typography variant="caption" color="text.secondary">
             浪 {fmt1(w.wave_m)}m · 風 {dirName16(w.wind_dir)} {w.wind_dir == null ? "" : `${Math.round(w.wind_dir)}° `}{kn(w.wind_ms)}kn{w.tide ? ` · ${TIDE_LABEL[w.tide]}` : ""}

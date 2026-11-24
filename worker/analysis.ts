@@ -79,6 +79,8 @@ export interface AnalysisResult {
   rate: number;
   avgLengthCm: number | null;
   maxLengthCm: number | null;
+  /** 各木蝦顏色釣到的數量（只算有記顏色的），依數量排序 */
+  egiColors: { color: string; catches: number; avgLengthCm: number | null }[];
   blankTrips: number;
   /** 有幾個小時找不到天氣資料（不會算進條件分組） */
   missingWeatherHours: number;
@@ -102,7 +104,7 @@ export async function analyze(
 
   const empty: AnalysisResult = {
     ...opts, trips: 0, hours: 0, catches: 0, squid: 0, fish: 0, rate: 0,
-    avgLengthCm: null, maxLengthCm: null, blankTrips: 0, missingWeatherHours: 0,
+    avgLengthCm: null, maxLengthCm: null, egiColors: [], blankTrips: 0, missingWeatherHours: 0,
     factors: FACTORS.map((f) => ({ key: f.key, label: f.label, buckets: [] })),
   };
   if (trips.length === 0) return empty;
@@ -111,7 +113,7 @@ export async function analyze(
   const { results: catches } = await db
     .prepare(`SELECT * FROM catches WHERE trip_id IN (${ids.map(() => "?").join(",")})`)
     .bind(...ids)
-    .all<{ trip_id: number; caught_at: number; species: "squid" | "fish"; length_cm: number | null }>();
+    .all<{ trip_id: number; caught_at: number; species: "squid" | "fish"; length_cm: number | null; egi_color: string | null }>();
 
   const counted = catches.filter((c) => opts.species === "all" || c.species === opts.species);
   const minT = Math.min(...trips.map((t) => t.start_at)) - 7200;
@@ -175,6 +177,23 @@ export async function analyze(
   }));
 
   const lengths = counted.map((c) => c.length_cm).filter((v): v is number => v != null);
+  // 木蝦顏色：這個是「每隻釣獲」的屬性（同一趟可能換好幾支），所以只統計數量與平均長度，不算進每小時的條件分析
+  const byColor = new Map<string, number[]>();
+  for (const c of counted) {
+    if (!c.egi_color) continue;
+    if (!byColor.has(c.egi_color)) byColor.set(c.egi_color, []);
+    if (c.length_cm != null) byColor.get(c.egi_color)!.push(c.length_cm);
+  }
+  const egiColors = [...byColor.keys()]
+    .map((color) => {
+      const ls = byColor.get(color)!;
+      return {
+        color,
+        catches: counted.filter((c) => c.egi_color === color).length,
+        avgLengthCm: ls.length ? +(ls.reduce((a, b) => a + b, 0) / ls.length).toFixed(1) : null,
+      };
+    })
+    .sort((a, b) => b.catches - a.catches);
   return {
     ...opts,
     trips: trips.length,
@@ -185,6 +204,7 @@ export async function analyze(
     rate: +rate.toFixed(3),
     avgLengthCm: lengths.length ? +(lengths.reduce((a, b) => a + b, 0) / lengths.length).toFixed(1) : null,
     maxLengthCm: lengths.length ? Math.max(...lengths) : null,
+    egiColors,
     blankTrips,
     missingWeatherHours: +missing.toFixed(1),
     factors,
