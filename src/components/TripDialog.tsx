@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField, Alert, Box } from "@mui/material";
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField, Alert, Box, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import dayjs from "dayjs";
 import { post, put } from "../lib/api";
 import type { Trip } from "../lib/types";
 import { useSpots } from "../hooks/useSpots";
 import { getPosition, nearestSpot } from "../lib/geo";
+import type { Species } from "../lib/types";
+import { SpeciesIcon } from "./icons";
+
+/** 新增出釣的預設時間：軟絲傍晚到前半夜、魚清晨到上午 */
+const DEFAULT_HOURS: Record<Species, { start: string; end: string }> = {
+  squid: { start: "17:30", end: "21:30" },
+  fish: { start: "04:30", end: "10:30" },
+};
 
 interface Props {
   open: boolean;
@@ -23,6 +31,9 @@ export default function TripDialog({ open, date, trip, onClose, onSaved }: Props
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [target, setTarget] = useState<Species>("squid");
+  // 自己改過時間後，切換軟絲／魚就不覆蓋
+  const [timesTouched, setTimesTouched] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -36,11 +47,11 @@ export default function TripDialog({ open, date, trip, onClose, onSaved }: Props
     } else {
       setSpotId("");
       setDay(date);
-      // 今天的話預設從現在開始，否則預設傍晚
-      const isToday = date === dayjs().format("YYYY-MM-DD");
-      const s = isToday ? dayjs().minute(dayjs().minute() < 30 ? 0 : 30) : dayjs(`${date}T18:00`);
-      setStart(s.format("HH:mm"));
-      setEnd(s.add(3, "hour").format("HH:mm"));
+      // 預設釣軟絲：17:30–21:30
+      setTarget("squid");
+      setStart(DEFAULT_HOURS.squid.start);
+      setEnd(DEFAULT_HOURS.squid.end);
+      setTimesTouched(false);
       setNote("");
       setNearHint("");
     }
@@ -90,6 +101,37 @@ export default function TripDialog({ open, date, trip, onClose, onSaved }: Props
       <DialogTitle>{trip ? "編輯出釣" : "新增出釣"}</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+          {!trip && (
+            <Box>
+              <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 600, mb: 0.75 }}>這趟主要釣（決定預設時間）</Typography>
+              <ToggleButtonGroup
+                exclusive fullWidth value={target}
+                onChange={(_, v: Species | null) => {
+                  if (!v) return;
+                  setTarget(v);
+                  if (!timesTouched) {
+                    setStart(DEFAULT_HOURS[v].start);
+                    setEnd(DEFAULT_HOURS[v].end);
+                  }
+                }}
+              >
+                <ToggleButton value="squid" sx={{ gap: 1, py: 1 }}>
+                  <SpeciesIcon species="squid" sx={{ fontSize: 28 }} />
+                  <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                    <span>軟絲</span>
+                    <Typography component="span" sx={{ fontSize: 11, opacity: 0.7 }}>17:30–21:30</Typography>
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="fish" sx={{ gap: 1, py: 1 }}>
+                  <SpeciesIcon species="fish" sx={{ fontSize: 28 }} />
+                  <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                    <span>魚</span>
+                    <Typography component="span" sx={{ fontSize: 11, opacity: 0.7 }}>04:30–10:30</Typography>
+                  </Box>
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          )}
           <TextField select label="地點" value={effectiveSpot} onChange={(e) => { setSpotId(Number(e.target.value)); setNearHint(""); }} helperText={nearHint || " "}>
             {(spots.data ?? []).map((s) => (
               <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
@@ -97,8 +139,8 @@ export default function TripDialog({ open, date, trip, onClose, onSaved }: Props
           </TextField>
           <TextField type="date" label="日期" value={day} onChange={(e) => setDay(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
           <Box sx={{ display: "flex", gap: 2 }}>
-            <TextField type="time" label="開始" value={start} onChange={(e) => setStart(e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-            <TextField type="time" label="結束" value={end} onChange={(e) => setEnd(e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} helperText={end <= start ? "隔天" : " "} />
+            <TextField type="time" label="開始" value={start} onChange={(e) => { setStart(e.target.value); setTimesTouched(true); }} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField type="time" label="結束" value={end} onChange={(e) => { setEnd(e.target.value); setTimesTouched(true); }} fullWidth slotProps={{ inputLabel: { shrink: true } }} helperText={end <= start ? "隔天" : " "} />
           </Box>
           <TextField label="備註" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} placeholder="水色、餌木顏色、釣法…" />
           {error && <Alert severity="error">{error}</Alert>}
