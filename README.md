@@ -2,6 +2,8 @@
 
 記錄每次出釣（包含槓龜）的釣獲與當下海況，依照條件分析哪種天氣比較好釣。手機優先，可加到主畫面（PWA）。
 
+正式網址：**https://fishing.weather-push-worker.workers.dev**
+
 > 不需要登入：知道網址的人都能看到並修改資料，網址不要公開分享。
 
 ## 架構
@@ -49,7 +51,7 @@ pnpm dev       # 前端，/api 代理到 :8787
    pnpm db:migrate:remote
    ```
 
-2. 手動部署：`pnpm deploy`，網址是 `https://fish-log.<你的子網域>.workers.dev`。
+2. 手動部署：`pnpm deploy`。
 
 ### 自動部署（GitHub Actions）
 

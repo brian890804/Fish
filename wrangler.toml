@@ -1,4 +1,4 @@
-name = "fish-log"
+name = "fishing"
 main = "worker/index.ts"
 compatibility_date = "2025-10-01"
 
