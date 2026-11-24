@@ -14,6 +14,7 @@ import ForecastTable from "../components/ForecastTable";
 import DailyOutlook from "../components/DailyOutlook";
 import { SpeciesIcon } from "../components/icons";
 import PageHeader from "./PageHeader";
+import QuickCatchButton from "../components/QuickCatchButton";
 
 function greeting() {
   const h = dayjs().hour();
@@ -77,7 +78,8 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
               </>
             )}
             <Box sx={{ flex: 1 }} />
-            <Button sx={{ alignSelf: "flex-start", mt: 2 }} endIcon={<ChevronIcon />} onClick={() => onOpenDate(t.today)}>查看今天</Button>
+            <Box sx={{ mt: 2 }}><QuickCatchButton onOpenDate={onOpenDate} compact /></Box>
+            <Button sx={{ alignSelf: "flex-start", mt: 1 }} endIcon={<ChevronIcon />} onClick={() => onOpenDate(t.today)}>查看今天</Button>
           </CardContent>
         </Card>
 
@@ -164,7 +166,7 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
                 <ToggleButton value={3}>3 小時</ToggleButton>
               </ToggleButtonGroup>
             </Box>
-            {t.fc.data ? <ForecastTable hours={t.fc.data.hours} step={step} cellWidth={46} rowHeight={32} /> : <Skeleton variant="rounded" height={360} />}
+            {t.fc.data ? <ForecastTable hours={t.fc.data.hours} tideEvents={t.fc.data.tideEvents} step={step} cellWidth={46} rowHeight={32} /> : <Skeleton variant="rounded" height={360} />}
           </CardContent>
         </Card>
       </Box>

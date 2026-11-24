@@ -70,6 +70,19 @@ export function tideState(
   return diff >= 0 ? "rising" : "falling";
 }
 
+/**
+ * 大潮／中潮／小潮：依月相判斷。新月、滿月前後約 2.5 天是大潮，上弦、下弦前後約 2 天是小潮，其他是中潮。
+ * （實際潮差另外用氣象署的滿／乾潮高度算）
+ */
+export function tideRangeClass(t: number): "大潮" | "中潮" | "小潮" {
+  const p = moonAt(t).phase;
+  const toSyzygy = Math.min(p, Math.abs(p - 0.5), 1 - p) * 29.53;
+  const toQuarter = Math.min(Math.abs(p - 0.25), Math.abs(p - 0.75)) * 29.53;
+  if (toSyzygy <= 2.5) return "大潮";
+  if (toQuarter <= 2) return "小潮";
+  return "中潮";
+}
+
 export interface TideEvent {
   time: number;
   type: "high" | "low";
@@ -264,4 +277,44 @@ export function scoreHour(c: HourConditions, factors: FactorStat[], overallRate:
   }
   if (n === 0) return null;
   return ratioToScore(Math.exp(logSum / n));
+}
+
+// ---------------- 一般經驗（先驗）評分 ----------------
+// 還沒有足夠的個人紀錄時，用岸邊餌木釣軟絲的一般經驗打分；
+// 個人紀錄越多，越以個人紀錄為主（見 blendedScore）。
+
+/** 個人紀錄要累積多少小時，權重才跟一般經驗各半 */
+export const PRIOR_HOURS = 10;
+
+/** 每個條件的倍率：>1 比平常好、<1 比平常差 */
+function priorRatios(c: HourConditions): number[] {
+  const r: number[] = [];
+  const windKn = c.wind_ms == null ? null : c.wind_ms * 1.943844;
+  if (windKn != null) r.push(windKn <= 8 ? 1.3 : windKn <= 12 ? 1.1 : windKn <= 15 ? 0.8 : windKn <= 20 ? 0.45 : 0.25);
+  if (c.wave_m != null) r.push(c.wave_m < 0.3 ? 0.9 : c.wave_m <= 1.0 ? 1.25 : c.wave_m <= 1.5 ? 0.95 : c.wave_m <= 2 ? 0.55 : 0.3);
+  const h = twHour(c.time);
+  // 傍晚到前半夜最好，清晨次之，白天最差
+  r.push(h >= 17 && h <= 22 ? 1.5 : h >= 3 && h <= 6 ? 1.2 : h >= 23 || h <= 2 ? 1.15 : h === 16 ? 1.0 : 0.6);
+  if (c.tide) r.push({ rising: 1.25, high: 1.15, falling: 0.95, low: 0.8 }[c.tide]);
+  if (c.precip_mm != null) r.push(c.precip_mm >= 2 ? 0.7 : c.precip_mm >= 0.5 ? 0.9 : 1);
+  if (c.sea_temp_c != null) r.push(c.sea_temp_c < 18 ? 0.6 : c.sea_temp_c < 20 ? 0.85 : 1.05);
+  return r;
+}
+
+/** 只用一般經驗的分數（0–100，50 = 普通） */
+export function priorScore(c: HourConditions): number {
+  const product = priorRatios(c).reduce((a, b) => a * b, 1);
+  return ratioToScore(Math.pow(product, 0.6));
+}
+
+/** 個人紀錄占的權重（0–1） */
+export const personalWeight = (historyHours: number) => historyHours / (historyHours + PRIOR_HOURS);
+
+/** 一般經驗與個人紀錄混合後的分數 */
+export function blendedScore(c: HourConditions, factors: FactorStat[], overallRate: number, historyHours: number): number {
+  const prior = priorScore(c);
+  const personal = historyHours > 0 ? scoreHour(c, factors, overallRate) : null;
+  if (personal == null) return prior;
+  const w = personalWeight(historyHours);
+  return Math.round((1 - w) * prior + w * personal);
 }

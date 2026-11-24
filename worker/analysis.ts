@@ -5,7 +5,7 @@ import {
   hourFloor,
   moonAt,
   ratioToScore,
-  scoreHour,
+  blendedScore,
   tideState,
   tideFromEvents,
   type TideEvent,
@@ -226,7 +226,8 @@ export async function forecast(db: D1Database, spotId: number, fromT: number, to
       tide: cond.tide,
       moon_pct: Math.round(moon.illumination * 100),
       moon_emoji: moon.emoji,
-      score: history.hours >= 5 ? scoreHour(cond, history.factors, history.rate) : null,
+      // 一般經驗＋你的紀錄：紀錄越多，越以你的紀錄為主
+      score: blendedScore(cond, history.factors, history.rate, history.hours),
     });
   }
   return hours;

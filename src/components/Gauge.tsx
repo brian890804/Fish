@@ -1,4 +1,5 @@
-import { Box, Divider, Tooltip, Typography } from "@mui/material";
+import { Box, Divider, Typography } from "@mui/material";
+import InfoPopover from "./InfoPopover";
 import InfoIcon from "@mui/icons-material/InfoOutlined";
 import { STATUS_LABEL, statusColor, type Advice, type Status } from "../lib/advice";
 import { TEXT } from "../theme";
@@ -79,14 +80,9 @@ export default function Gauge({ label, value, min, max, display, unit, color, su
   return (
     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.75, minWidth: 0 }}>
       {advice ? (
-        <Tooltip title={<AdviceContent advice={advice} status={status} best={best} />} arrow enterTouchDelay={0} leaveTouchDelay={6000}>
-          <Box
-            role="button" tabIndex={0} aria-label={`${advice.title}說明`}
-            sx={{ cursor: "help", borderRadius: 1.5, "&:hover, &:focus-visible": { bgcolor: "rgba(148,163,184,0.10)", outline: "none" }, "&:hover .info, &:focus-visible .info": { color: "primary.main" } }}
-          >
-            {title}
-          </Box>
-        </Tooltip>
+        <InfoPopover label={`${advice.title}說明`} content={<AdviceContent advice={advice} status={status} best={best} />}>
+          {title}
+        </InfoPopover>
       ) : (
         title
       )}

@@ -1,7 +1,15 @@
 import { useState } from "react";
 import dayjs from "dayjs";
 import { post, useApi } from "../lib/api";
-import type { DayDetail, ForecastResponse } from "../lib/types";
+import type { DayDetail, ForecastHour, ForecastResponse } from "../lib/types";
+import { ADVICE } from "../lib/advice";
+import { kn } from "../lib/format";
+
+/** 風、陣風、浪任一項是「不推薦」 */
+export function isUnsafe(h: ForecastHour): boolean {
+  const s = (a: (typeof ADVICE)[string], v: number | null) => (a.status && v != null ? a.status(v) : "info");
+  return s(ADVICE.wind, kn(h.wind_ms)) === "bad" || s(ADVICE.gust, kn(h.gust_ms)) === "bad" || s(ADVICE.wave, h.wave_m) === "bad";
+}
 
 const REFRESH_MS = 20 * 60 * 1000;
 
@@ -26,7 +34,12 @@ export function useToday() {
   const now = fc.data?.hours.find((h) => h.time === nowT);
   const endOfDay = dayjs().endOf("day").unix();
   const todayHours = fc.data?.hours.filter((h) => h.time >= nowT && h.time <= endOfDay) ?? [];
-  const best = [...todayHours].filter((h) => h.score != null).sort((a, b) => b.score! - a.score!).slice(0, 3);
+  // 較好的時段：分數要比普通好（55 以上），而且風、陣風、浪都不能是「不推薦」；沒有就是空的
+  const best = [...todayHours]
+    .filter((h) => (h.score ?? 0) >= 55 && !isUnsafe(h))
+    .sort((a, b) => b.score! - a.score!)
+    .slice(0, 3)
+    .sort((a, b) => a.time - b.time);
 
   const catches = day.data?.trips.flatMap((t) => t.catches) ?? [];
   const sourceLabel = !fc.data?.hours.length

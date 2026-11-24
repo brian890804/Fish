@@ -1,10 +1,12 @@
-import { Box, Chip, Divider, Skeleton, Tooltip, Typography } from "@mui/material";
+import { Box, Chip, Divider, Skeleton, Typography } from "@mui/material";
+import InfoPopover from "./InfoPopover";
+import InfoIcon from "@mui/icons-material/InfoOutlined";
 import dayjs from "dayjs";
 import type { Analysis, ForecastHour } from "../lib/types";
 import { kn, scoreColor } from "../lib/format";
 import { useApi } from "../lib/api";
 import { ADVICE, statusColor, type Status } from "../lib/advice";
-import { TIDE_LABEL, dirName16 } from "../../shared/conditions";
+import { TIDE_LABEL, dirName16, personalWeight } from "../../shared/conditions";
 import { STATUS, SURFACE, TEXT } from "../theme";
 import Gauge, { gaugeStatus } from "./Gauge";
 import Arrow from "./Arrow";
@@ -86,21 +88,32 @@ export default function ConditionsGrid({ now, best = [], historyHours = 0, secon
             <Typography sx={{ fontSize: 13, color: TEXT.secondary, mt: 0.25 }}>{reasons.join("、")} 超出建議</Typography>
           )}
         </Box>
-        <Tooltip
-          arrow enterTouchDelay={0} leaveTouchDelay={6000}
-          title={
-            historyHours < 5
-              ? "評分是用你自己的出釣紀錄學出來的：累積 5 小時以上的紀錄（包含槓龜）後，會比對你過去釣得好的條件，給每個小時 0–100 分，50 分是你的平常水準。"
-              : "依你過去的出釣紀錄比對現在的條件：50 分是你的平常水準，越高越像你以前釣得好的時候。"
+        <InfoPopover
+          label="評分說明"
+          content={
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, p: 0.5 }}>
+              <Typography sx={{ fontWeight: 800, fontSize: 14 }}>評分怎麼算</Typography>
+              <Typography sx={{ fontSize: 12.5, lineHeight: 1.6 }}>
+                0–100 分，<b>50 分是普通</b>，越高越適合出釣。
+              </Typography>
+              <Typography sx={{ fontSize: 12.5, lineHeight: 1.6 }}>
+                目前 <b>{Math.round((1 - personalWeight(historyHours)) * 100)}%</b> 依一般經驗：風浪在建議區間內、傍晚到前半夜、漲潮或滿潮前後、沒有大雨、海溫夠高會加分。
+              </Typography>
+              <Typography sx={{ fontSize: 12.5, lineHeight: 1.6 }}>
+                <b>{Math.round(personalWeight(historyHours) * 100)}%</b> 依你的 {historyHours} 小時出釣紀錄：比對你過去在什麼條件下釣得比較好。紀錄越多，越以你自己的紀錄為主。
+              </Typography>
+            </Box>
           }
         >
-          <Box sx={{ textAlign: "center", px: 1.25, py: 0.75, borderRadius: 2.5, bgcolor: SURFACE.raised, cursor: "help", flexShrink: 0 }}>
-            <Typography sx={{ fontSize: 10.5, color: TEXT.secondary, fontWeight: 700, lineHeight: 1.2 }}>評分</Typography>
+          <Box sx={{ textAlign: "center", px: 1.25, py: 0.75, borderRadius: 2.5, bgcolor: SURFACE.raised, flexShrink: 0 }}>
+            <Typography sx={{ fontSize: 10.5, color: TEXT.secondary, fontWeight: 700, lineHeight: 1.2, display: "flex", alignItems: "center", gap: 0.25, justifyContent: "center" }}>
+              評分 <InfoIcon className="info" sx={{ fontSize: 11 }} />
+            </Typography>
             <Typography sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: now.score == null ? TEXT.muted : scoreColor(now.score) }}>
               {now.score ?? "—"}
             </Typography>
           </Box>
-        </Tooltip>
+        </InfoPopover>
       </Box>
 
       {/* 主要：決定能不能出門 */}
@@ -133,6 +146,9 @@ export default function ConditionsGrid({ now, best = [], historyHours = 0, secon
         <Gauge size={secondarySize} color={C.pressure} value={now.pressure_hpa} min={990} max={1040} display={now.pressure_hpa == null ? "-" : Math.round(now.pressure_hpa)} unit="hPa" label="氣壓" advice={ADVICE.pressure} />
       </Box>
 
+      {best.length === 0 && (
+        <Typography sx={{ fontSize: 12.5, color: TEXT.secondary, fontWeight: 600 }}>今天剩下的時段都不建議出釣（風浪超出建議或評分偏低）。</Typography>
+      )}
       {best.length > 0 && (
         <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
           <Typography sx={{ fontSize: 12.5, color: TEXT.secondary, fontWeight: 600 }}>今天較好的時段</Typography>
@@ -144,9 +160,9 @@ export default function ConditionsGrid({ now, best = [], historyHours = 0, secon
           ))}
         </Box>
       )}
-      {historyHours < 5 && (
-        <Typography sx={{ fontSize: 12, color: TEXT.muted }}>評分會在累積 5 小時以上的出釣紀錄（包含槓龜）後開始計算。</Typography>
-      )}
+      <Typography sx={{ fontSize: 12, color: TEXT.muted }}>
+        評分目前 {Math.round((1 - personalWeight(historyHours)) * 100)}% 依一般經驗、{Math.round(personalWeight(historyHours) * 100)}% 依你的紀錄（{historyHours} 小時）。多記錄幾次（包含槓龜）就會越來越貼近你自己的釣況。
+      </Typography>
     </Box>
   );
 }

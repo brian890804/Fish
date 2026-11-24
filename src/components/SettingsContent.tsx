@@ -1,8 +1,10 @@
 import { useState } from "react";
 import {
-  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, MenuItem, TextField, Typography,
+  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, CircularProgress, MenuItem, TextField, Typography,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMoreRounded";
+import MyLocationIcon from "@mui/icons-material/MyLocationRounded";
+import { getPosition, hasOwnLocation } from "../lib/geo";
 import { post, put } from "../lib/api";
 import { useSpots } from "../hooks/useSpots";
 import type { Spot } from "../lib/types";
@@ -21,11 +23,23 @@ function SpotEditor({ spot, spots, onSaved }: { spot?: Spot; spots: Spot[]; onSa
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const own = source === OWN;
   const usedByOthers = !!spot && spots.some((s) => s.weather_spot_id === spot.id);
+  const [locating, setLocating] = useState(false);
+  const [locMsg, setLocMsg] = useState("");
+  const useHere = async () => {
+    setLocating(true);
+    setLocMsg("");
+    const pos = await getPosition(8000);
+    setLocating(false);
+    if (!pos) return setLocMsg("抓不到定位，請確認有允許瀏覽器使用位置");
+    setLat(pos.lat.toFixed(5));
+    setLon(pos.lon.toFixed(5));
+    setLocMsg(`已填入目前位置（誤差約 ${Math.round(pos.accuracy)} 公尺），記得按儲存`);
+  };
 
   const save = async () => {
     const payload = own
       ? { name, weather_spot_id: null, lat: Number(lat), lon: Number(lon), wg_spot_id: wg ? Number(wg) : null }
-      : { name, weather_spot_id: Number(source) };
+      : { name, weather_spot_id: Number(source), ...(lat && lon ? { lat: Number(lat), lon: Number(lon) } : {}) };
     try {
       if (spot) await put(`/spots/${spot.id}`, payload);
       else await post("/spots", payload);
@@ -50,12 +64,21 @@ function SpotEditor({ spot, spots, onSaved }: { spot?: Spot; spots: Spot[]; onSa
         ))}
         <MenuItem value={OWN}>自己抓天氣</MenuItem>
       </TextField>
+      {/* 位置：自己抓天氣時是天氣座標；共用天氣時只用來「自動判斷釣點」 */}
+      <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+        <TextField size="small" label="緯度" value={lat} onChange={(e) => setLat(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
+        <TextField size="small" label="經度" value={lon} onChange={(e) => setLon(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
+      </Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -0.5 }}>
+        <Button size="small" variant="outlined" startIcon={locating ? <CircularProgress size={14} /> : <MyLocationIcon />} disabled={locating} onClick={useHere}>
+          用目前位置
+        </Button>
+        <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+          {locMsg || (spot && !hasOwnLocation(spot, spots) ? "還沒設定位置，到這個釣點時按一下" : "到了釣點按一下，之後會自動選這個釣點")}
+        </Typography>
+      </Box>
       {own && (
         <>
-          <Box sx={{ display: "flex", gap: 1 }}>
-            <TextField size="small" label="緯度" value={lat} onChange={(e) => setLat(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
-            <TextField size="small" label="經度" value={lon} onChange={(e) => setLon(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
-          </Box>
           <TextField size="small" label="溫古魯 spot id" value={wg} onChange={(e) => setWg(e.target.value)} helperText="溫古魯網址最後的數字，例如 windguru.cz/733676" slotProps={{ htmlInput: { inputMode: "numeric" } }} />
         </>
       )}

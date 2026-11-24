@@ -8,6 +8,7 @@ import { useToday } from "../hooks/useToday";
 import ForecastTable from "../components/ForecastTable";
 import CatchCount from "../components/CatchCount";
 import ConditionsGrid from "../components/ConditionsGrid";
+import QuickCatchButton from "../components/QuickCatchButton";
 import { spinSx } from "../lib/sx";
 import { TEXT } from "../theme";
 
@@ -31,6 +32,9 @@ export default function TodayPage({ onOpenDate }: { onOpenDate: (d: string) => v
           <RefreshIcon sx={spinSx(t.refreshing)} />
         </IconButton>
       </Box>
+
+      {/* 快速記一隻：岸邊手濕、天黑時一按就記 */}
+      <QuickCatchButton onOpenDate={onOpenDate} />
 
       {/* 今日釣獲 */}
       <Card>
@@ -73,7 +77,7 @@ export default function TodayPage({ onOpenDate }: { onOpenDate: (d: string) => v
               <ToggleButton value={3}>3h</ToggleButton>
             </ToggleButtonGroup>
           </Box>
-          {t.fc.data ? <ForecastTable hours={t.fc.data.hours} step={step} /> : <Skeleton variant="rounded" height={360} sx={{ mx: 2 }} />}
+          {t.fc.data ? <ForecastTable hours={t.fc.data.hours} tideEvents={t.fc.data.tideEvents} step={step} /> : <Skeleton variant="rounded" height={360} sx={{ mx: 2 }} />}
           {t.fc.data?.spot.wg_spot_id && (
             <Button size="small" endIcon={<OpenIcon sx={{ fontSize: "16px !important" }} />} href={`https://www.windguru.cz/${t.fc.data.spot.wg_spot_id}`} target="_blank" rel="noreferrer" sx={{ mx: 1.5, mt: 1 }}>
               在溫古魯開啟

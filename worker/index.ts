@@ -226,6 +226,33 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     return json({ ok: true });
   }
 
+  // ---- 快速記一隻：找今天這個釣點還在進行中的出釣，沒有就開一段新的，再記一隻軟絲 ----
+  if (path === "/quick-catch" && method === "POST") {
+    const q = await body<{ spot_id?: number; egi_color?: string | null; species?: "squid" | "fish" }>(req);
+    const now = Math.floor(Date.now() / 1000);
+    const spot = await getSpot(env, q.spot_id ?? null);
+    const species = q.species === "fish" ? "fish" : "squid";
+    if (q.egi_color != null && !isEgiColor(q.egi_color)) throw new HttpError(400, "木蝦顏色不正確");
+    // 結束時間在 3 小時內的，算同一趟出釣
+    let trip = await env.DB.prepare(
+      "SELECT * FROM trips WHERE spot_id = ? AND date = ? AND end_at >= ? ORDER BY start_at DESC LIMIT 1",
+    ).bind(spot.id, twDate(now), now - 3 * 3600).first<{ id: number; start_at: number; end_at: number }>();
+    let created = false;
+    if (!trip) {
+      // 新的一趟：從 30 分鐘前開始（通常到了一陣子才釣到），先抓到 1 小時後，之後記錄會自動撐開
+      trip = await env.DB.prepare(
+        "INSERT INTO trips (spot_id, date, start_at, end_at, note) VALUES (?, ?, ?, ?, NULL) RETURNING *",
+      ).bind(spot.id, twDate(now), now - 1800, now + 3600).first();
+      created = true;
+      await ensureWeather(env.DB, await weatherSpotOf(env, spot), now - 1800, now + 3600).catch((e) => console.error("補抓天氣失敗", e));
+    }
+    const c = await env.DB.prepare(
+      "INSERT INTO catches (trip_id, caught_at, species, egi_color) VALUES (?, ?, ?, ?) RETURNING *",
+    ).bind(trip!.id, now, species, q.egi_color ?? null).first();
+    await stretchTrip(env, trip!.id, now);
+    return json({ catch: c, trip_id: trip!.id, trip_created: created, spot: { id: spot.id, name: spot.name }, date: twDate(now) }, 201);
+  }
+
   // ---- 釣獲 ----
   if (path === "/catches" && method === "POST") {
     const c = await body<CatchInput>(req);
@@ -287,7 +314,9 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const last = await env.DB.prepare(
       "SELECT updated_at AS t, source FROM weather_hourly WHERE spot_id = ? ORDER BY updated_at DESC, time DESC LIMIT 1",
     ).bind(spot.id).first<{ t: number; source: string }>();
-    return json({ spot, hours, updatedAt: last?.t ?? null, source: last?.source ?? null, historyHours: history.hours });
+    // 預報期間的滿潮／乾潮時間（表格標示用）
+    const tideEvents = (await loadTideEvents(env.DB, [spot.id], from, from + days * 86400)).get(spot.id) ?? [];
+    return json({ spot, hours, tideEvents, updatedAt: last?.t ?? null, source: last?.source ?? null, historyHours: history.hours });
   }
   if (path === "/analysis" && method === "GET") {
     const from = url.searchParams.get("from") ?? "2000-01-01";

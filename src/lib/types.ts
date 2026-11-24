@@ -46,6 +46,7 @@ export interface ForecastResponse {
   updatedAt: number | null;
   source: string | null;
   historyHours: number;
+  tideEvents: { time: number; type: "high" | "low"; height_cm?: number | null }[];
 }
 
 export interface Catch {

@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { post, put } from "../lib/api";
 import type { Trip } from "../lib/types";
 import { useSpots } from "../hooks/useSpots";
+import { getPosition, nearestSpot } from "../lib/geo";
 
 interface Props {
   open: boolean;
@@ -41,8 +42,26 @@ export default function TripDialog({ open, date, trip, onClose, onSaved }: Props
       setStart(s.format("HH:mm"));
       setEnd(s.add(3, "hour").format("HH:mm"));
       setNote("");
+      setNearHint("");
     }
   }, [open, trip, date]);
+
+  // 新增今天的出釣時，用定位自動選最近的釣點（使用者自己選過就不覆蓋）
+  const [nearHint, setNearHint] = useState("");
+  useEffect(() => {
+    if (!open || trip || date !== dayjs().format("YYYY-MM-DD") || !spots.data) return;
+    let cancelled = false;
+    getPosition(5000).then((pos) => {
+      if (cancelled || !pos || !spots.data) return;
+      const near = nearestSpot(spots.data, pos);
+      if (!near) return;
+      setSpotId((cur) => (cur === "" ? near.spot.id : cur));
+      setNearHint(`依定位選擇（距離約 ${near.km < 1 ? `${Math.round(near.km * 1000)} 公尺` : `${near.km.toFixed(1)} 公里`}）`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, trip, date, spots.data]);
 
   const defaultSpot = (spots.data?.find((s) => s.is_default) ?? spots.data?.[0])?.id ?? "";
   const effectiveSpot = spotId === "" ? defaultSpot : spotId;
@@ -71,7 +90,7 @@ export default function TripDialog({ open, date, trip, onClose, onSaved }: Props
       <DialogTitle>{trip ? "編輯出釣" : "新增出釣"}</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
-          <TextField select label="地點" value={effectiveSpot} onChange={(e) => setSpotId(Number(e.target.value))}>
+          <TextField select label="地點" value={effectiveSpot} onChange={(e) => { setSpotId(Number(e.target.value)); setNearHint(""); }} helperText={nearHint || " "}>
             {(spots.data ?? []).map((s) => (
               <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
             ))}
