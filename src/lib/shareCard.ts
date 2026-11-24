@@ -235,5 +235,6 @@ export function downloadImage(blob: Blob, date: string) {
   a.href = url;
   a.download = fileName(date);
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  // iPhone 會在下載預覽頁才讀取這個網址，太早撤銷會變成空白圖，所以留久一點
+  setTimeout(() => URL.revokeObjectURL(url), 120_000);
 }
