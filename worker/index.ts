@@ -61,6 +61,8 @@ interface TripInput {
   start_at: number;
   end_at: number;
   note?: string | null;
+  /** 這趟主要釣什麼：軟絲或魚（分析時只算進同一種的出釣） */
+  target?: Species;
 }
 
 interface CatchInput {
@@ -79,6 +81,7 @@ interface CatchInput {
 }
 
 function validateTrip(t: TripInput) {
+  if (t.target !== undefined && t.target !== "squid" && t.target !== "fish") throw new HttpError(400, "目標只能是軟絲或魚");
   if (!Number.isFinite(t.start_at) || !Number.isFinite(t.end_at)) throw new HttpError(400, "缺少開始或結束時間");
   if (t.end_at <= t.start_at) throw new HttpError(400, "結束時間要晚於開始時間");
   if (t.end_at - t.start_at > 24 * 3600) throw new HttpError(400, "一次出釣不能超過 24 小時");
@@ -337,8 +340,8 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const clash = await overlappingTrip(env.DB, uid, t.start_at, t.end_at, null);
     if (clash) throw new HttpError(400, clashMessage(clash));
     const r = await env.DB.prepare(
-      "INSERT INTO trips (user_id, spot_id, date, start_at, end_at, note) VALUES (?, ?, ?, ?, ?, ?) RETURNING *",
-    ).bind(uid, spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null).first();
+      "INSERT INTO trips (user_id, spot_id, date, start_at, end_at, note, target) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *",
+    ).bind(uid, spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null, t.target ?? "squid").first();
     await ensureWeather(env.DB, await weatherSpotOf(env, spot), t.start_at, t.end_at).catch((e) => console.error("補抓天氣失敗", e));
     return json(r, 201);
   }
@@ -349,8 +352,8 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const clash = await overlappingTrip(env.DB, uid, t.start_at, t.end_at, Number(seg[1]));
     if (clash) throw new HttpError(400, clashMessage(clash));
     const r = await env.DB.prepare(
-      "UPDATE trips SET spot_id = ?, date = ?, start_at = ?, end_at = ?, note = ? WHERE id = ? AND user_id = ? RETURNING *",
-    ).bind(spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null, Number(seg[1]), uid).first();
+      "UPDATE trips SET spot_id = ?, date = ?, start_at = ?, end_at = ?, note = ?, target = COALESCE(?, target) WHERE id = ? AND user_id = ? RETURNING *",
+    ).bind(spot.id, twDate(t.start_at), t.start_at, t.end_at, t.note ?? null, t.target ?? null, Number(seg[1]), uid).first();
     if (!r) throw new HttpError(404, "找不到出釣紀錄");
     await ensureWeather(env.DB, await weatherSpotOf(env, spot), t.start_at, t.end_at).catch((e) => console.error("補抓天氣失敗", e));
     return json(r);

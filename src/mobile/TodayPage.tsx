@@ -7,6 +7,7 @@ import OpenIcon from "@mui/icons-material/OpenInNewRounded";
 import dayjs from "dayjs";
 import { useToday } from "../hooks/useToday";
 import ForecastTable from "../components/ForecastTable";
+import { SpeciesIcon } from "../components/icons";
 import CatchCount from "../components/CatchCount";
 import ConditionsGrid from "../components/ConditionsGrid";
 import SunMoonRow from "../components/SunMoonRow";
@@ -34,6 +35,12 @@ export default function TodayPage({ onOpenDate }: { onOpenDate: (d: string) => v
           <RefreshIcon sx={spinSx(t.refreshing)} />
         </IconButton>
       </Box>
+
+      {/* 看哪一種的評分：軟絲或魚（整個今天頁都跟著這個切換） */}
+      <ToggleButtonGroup size="small" exclusive fullWidth value={t.species} onChange={(_, v) => v && t.setSpecies(v)}>
+        <ToggleButton value="squid"><SpeciesIcon species="squid" sx={{ fontSize: 18, mr: 0.75 }} />軟絲</ToggleButton>
+        <ToggleButton value="fish"><SpeciesIcon species="fish" sx={{ fontSize: 18, mr: 0.75 }} />魚</ToggleButton>
+      </ToggleButtonGroup>
 
       {/* 今日釣獲 */}
       <Card>
@@ -91,7 +98,7 @@ export default function TodayPage({ onOpenDate }: { onOpenDate: (d: string) => v
               <ToggleButton value={3}>3h</ToggleButton>
             </ToggleButtonGroup>
           </Box>
-          {t.fc.data ? <ForecastTable hours={t.fc.data.hours} tideEvents={t.fc.data.tideEvents} step={step} /> : <Skeleton variant="rounded" height={360} sx={{ mx: 2 }} />}
+          {t.fc.data ? <ForecastTable hours={t.hours} tideEvents={t.fc.data.tideEvents} step={step} /> : <Skeleton variant="rounded" height={360} sx={{ mx: 2 }} />}
           {t.fc.data?.spot.wg_spot_id && (
             <Button size="small" endIcon={<OpenIcon sx={{ fontSize: "16px !important" }} />} href={`https://www.windguru.cz/${t.fc.data.spot.wg_spot_id}`} target="_blank" rel="noreferrer" sx={{ mx: 1.5, mt: 1 }}>
               在溫古魯開啟

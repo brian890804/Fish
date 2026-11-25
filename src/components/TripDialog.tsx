@@ -44,6 +44,7 @@ export default function TripDialog({ open, date, trip, onClose, onSaved }: Props
       setStart(dayjs.unix(trip.start_at).format("HH:mm"));
       setEnd(dayjs.unix(trip.end_at).format("HH:mm"));
       setNote(trip.note ?? "");
+      setTarget(trip.target ?? "squid");
     } else {
       setSpotId("");
       setDay(date);
@@ -81,7 +82,7 @@ export default function TripDialog({ open, date, trip, onClose, onSaved }: Props
     const s = dayjs(`${day}T${start}`);
     let e = dayjs(`${day}T${end}`);
     if (!e.isAfter(s)) e = e.add(1, "day"); // 跨過午夜
-    const payload = { spot_id: effectiveSpot || undefined, start_at: s.unix(), end_at: e.unix(), note: note || null };
+    const payload = { spot_id: effectiveSpot || undefined, start_at: s.unix(), end_at: e.unix(), note: note || null, target };
     setBusy(true);
     setError("");
     try {
@@ -101,15 +102,16 @@ export default function TripDialog({ open, date, trip, onClose, onSaved }: Props
       <DialogTitle>{trip ? "編輯出釣" : "新增出釣"}</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
-          {!trip && (
+          {(
             <Box>
-              <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 600, mb: 0.75 }}>這趟主要釣（決定預設時間）</Typography>
+              <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 600, mb: 0.75 }}>這趟主要釣（決定算進哪一種的分析）</Typography>
               <ToggleButtonGroup
                 exclusive fullWidth value={target}
                 onChange={(_, v: Species | null) => {
                   if (!v) return;
                   setTarget(v);
-                  if (!timesTouched) {
+                  // 只有新增時，才依物種帶入預設時間（編輯時不動原本的時間）
+                  if (!trip && !timesTouched) {
                     setStart(DEFAULT_HOURS[v].start);
                     setEnd(DEFAULT_HOURS[v].end);
                   }

@@ -95,13 +95,16 @@ export async function analyze(
 ): Promise<AnalysisResult> {
   // 每趟出釣都帶上它實際使用的天氣來源（附近釣點共用水湳洞漁港的天氣）
   // 只看這個帳號的出釣（魚貨是個人的，天氣是共用的）
+  // 只算「目標是這個物種」的出釣：釣軟絲的時候，魚的紀錄不會被算成一次次空軍（反之亦然）
+  const targetSql = opts.species === "all" ? "" : " AND t.target = ?";
   const base = `SELECT t.*, COALESCE(s.weather_spot_id, s.id) AS wsid FROM trips t JOIN spots s ON s.id = t.spot_id
-                 WHERE t.user_id = ? AND t.date BETWEEN ? AND ?`;
+                 WHERE t.user_id = ? AND t.date BETWEEN ? AND ?${targetSql}`;
+  const head = opts.species === "all" ? [opts.userId, opts.from, opts.to] : [opts.userId, opts.from, opts.to, opts.species];
   const tripsQ = opts.spotId
-    ? db.prepare(`${base} AND t.spot_id = ?`).bind(opts.userId, opts.from, opts.to, opts.spotId)
+    ? db.prepare(`${base} AND t.spot_id = ?`).bind(...head, opts.spotId)
     : opts.weatherSpotId
-      ? db.prepare(`${base} AND COALESCE(s.weather_spot_id, s.id) = ?`).bind(opts.userId, opts.from, opts.to, opts.weatherSpotId)
-      : db.prepare(base).bind(opts.userId, opts.from, opts.to);
+      ? db.prepare(`${base} AND COALESCE(s.weather_spot_id, s.id) = ?`).bind(...head, opts.weatherSpotId)
+      : db.prepare(base).bind(...head);
   const { results: trips } = await tripsQ.all<{ id: number; spot_id: number; wsid: number; start_at: number; end_at: number }>();
 
   const empty: AnalysisResult = {

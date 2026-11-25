@@ -4,6 +4,10 @@ import { post, useApi } from "../lib/api";
 import type { DayDetail, ForecastHour, ForecastResponse } from "../lib/types";
 import { ADVICE } from "../lib/advice";
 import { kn } from "../lib/format";
+import { useStoredState } from "../lib/prefs";
+
+/** 全站共用的物種選擇（記在這台裝置上）：評分、現在卡、較好的時段都依它顯示 */
+export type SpeciesPick = "squid" | "fish";
 
 /** 風、陣風、浪任一項是「不推薦」 */
 export function isUnsafe(h: ForecastHour): boolean {
@@ -17,6 +21,7 @@ const REFRESH_MS = 20 * 60 * 1000;
 export function useToday() {
   const today = dayjs().format("YYYY-MM-DD");
   const fc = useApi<ForecastResponse>("/forecast?days=7", { refreshInterval: REFRESH_MS });
+  const [species, setSpecies] = useStoredState<SpeciesPick>("fish.species", "squid");
   // 夜釣跨過午夜：前一天開始、還在進行的那趟也算進「今日釣獲」
   const day = useApi<DayDetail>(`/day?date=${today}&overnight=1`);
   const [refreshing, setRefreshing] = useState(false);
@@ -31,10 +36,12 @@ export function useToday() {
     }
   };
 
+  // 依選中的物種換成那一種的評分（後端同時給軟絲 score、魚 fish_score）
+  const hours = (fc.data?.hours ?? []).map((h) => ({ ...h, score: species === "fish" ? h.fish_score : h.score }));
   const nowT = dayjs().startOf("hour").unix();
-  const now = fc.data?.hours.find((h) => h.time === nowT);
+  const now = hours.find((h) => h.time === nowT);
   const endOfDay = dayjs().endOf("day").unix();
-  const todayHours = fc.data?.hours.filter((h) => h.time >= nowT && h.time <= endOfDay) ?? [];
+  const todayHours = hours.filter((h) => h.time >= nowT && h.time <= endOfDay);
   // 較好的時段：分數要比普通好（55 以上），而且風、陣風、浪都不能是「不推薦」；沒有就是空的
   const best = [...todayHours]
     .filter((h) => (h.score ?? 0) >= 55 && !isUnsafe(h))
@@ -55,6 +62,9 @@ export function useToday() {
     day,
     refresh,
     refreshing,
+    species,
+    setSpecies,
+    hours,
     now,
     best,
     sourceLabel,

@@ -38,9 +38,16 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
         title={greeting()}
         subtitle={`${dayjs().format("YYYY 年 M 月 D 日 dddd")} · ${t.fc.data?.spot.name ?? ""}`}
         actions={
-          <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={() => onOpenDate(t.today)}>
-            {t.tripCount === 0 ? "開始今天的出釣" : "記錄釣獲"}
-          </Button>
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+            {/* 看哪一種的評分：軟絲或魚（整個總覽都跟著這個切換） */}
+            <ToggleButtonGroup size="small" exclusive value={t.species} onChange={(_, v) => v && t.setSpecies(v)}>
+              <ToggleButton value="squid"><SpeciesIcon species="squid" sx={{ fontSize: 18, mr: 0.75 }} />軟絲</ToggleButton>
+              <ToggleButton value="fish"><SpeciesIcon species="fish" sx={{ fontSize: 18, mr: 0.75 }} />魚</ToggleButton>
+            </ToggleButtonGroup>
+            <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={() => onOpenDate(t.today)}>
+              {t.tripCount === 0 ? "開始今天的出釣" : "記錄釣獲"}
+            </Button>
+          </Box>
         }
       />
       {t.fc.error && <Alert severity="error" sx={{ mb: 2 }}>{String(t.fc.error.message)}</Alert>}
@@ -147,7 +154,7 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
         <Card sx={{ gridColumn: "span 12" }}>
           <CardContent sx={{ p: 3 }}>
             <Typography sx={cardTitleSx}>未來 7 天</Typography>
-            {t.fc.data ? <DailyOutlook hours={t.fc.data.hours} /> : <Skeleton variant="rounded" height={220} />}
+            {t.fc.data ? <DailyOutlook hours={t.hours} /> : <Skeleton variant="rounded" height={220} />}
           </CardContent>
         </Card>
 
@@ -167,7 +174,7 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
                 <ToggleButton value={3}>3 小時</ToggleButton>
               </ToggleButtonGroup>
             </Box>
-            {t.fc.data ? <ForecastTable hours={t.fc.data.hours} tideEvents={t.fc.data.tideEvents} step={step} cellWidth={46} rowHeight={32} /> : <Skeleton variant="rounded" height={360} />}
+            {t.fc.data ? <ForecastTable hours={t.hours} tideEvents={t.fc.data.tideEvents} step={step} cellWidth={46} rowHeight={32} /> : <Skeleton variant="rounded" height={360} />}
           </CardContent>
         </Card>
       </Box>

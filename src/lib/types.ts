@@ -37,9 +37,9 @@ export interface ForecastHour extends WeatherHour {
   tide: TideState | null;
   moon_pct: number;
   moon_emoji: string;
-  /** 軟絲評分（用軟絲的紀錄算） */
+  /** 軟絲評分（用軟絲的出釣紀錄算） */
   score: number | null;
-  /** 魚評分（用魚的紀錄算） */
+  /** 魚評分（用魚的出釣紀錄算） */
   fish_score: number | null;
 }
 
@@ -79,6 +79,8 @@ export interface Trip {
   start_at: number;
   end_at: number;
   note: string | null;
+  /** 這趟主要釣什麼 */
+  target: "squid" | "fish";
   catches: Catch[];
   weather: WeatherHour[];
   /** 氣象署的滿／乾潮時間 */
