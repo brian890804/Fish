@@ -25,7 +25,10 @@ export async function pushState(): Promise<PushState> {
   return sub ? "on" : "off";
 }
 
-export async function enablePush(): Promise<PushState> {
+/** 這台裝置要收哪一種的好時段通知 */
+export type PushSpeciesPick = "squid" | "fish" | "both";
+
+export async function enablePush(species: PushSpeciesPick = "squid"): Promise<PushState> {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return "denied";
   const { publicKey } = await api<{ publicKey: string | null }>("/push/key");
@@ -34,8 +37,15 @@ export async function enablePush(): Promise<PushState> {
   const sub =
     (await reg.pushManager.getSubscription()) ??
     (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource }));
-  await post("/push/subscribe", { subscription: sub.toJSON() });
+  await post("/push/subscribe", { subscription: sub.toJSON(), species });
   return "on";
+}
+
+/** 已經開啟通知的裝置，改成收哪一種 */
+export async function setPushSpecies(species: PushSpeciesPick): Promise<void> {
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (sub) await post("/push/species", { endpoint: sub.endpoint, species });
 }
 
 export async function disablePush(): Promise<PushState> {

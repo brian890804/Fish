@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Switch, Typography } from "@mui/material";
 import dayjs from "dayjs";
 import { post, useApi } from "../lib/api";
-import { disablePush, enablePush, pushState, type PushState } from "../lib/push";
+import { disablePush, enablePush, pushState, setPushSpecies, type PushSpeciesPick, type PushState } from "../lib/push";
+import { useStoredState } from "../lib/prefs";
+import { ToggleButton, ToggleButtonGroup } from "@mui/material";
 import { TEXT } from "../theme";
 
 const HINT: Record<PushState, string> = {
@@ -24,7 +26,11 @@ export default function PushCard() {
   const [state, setState] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const preview = useApi<Preview>("/push/preview");
+  // 這台裝置要收哪一種（記在裝置上，並同步到伺服器）
+  const [species, setSpecies] = useStoredState<PushSpeciesPick>("fish.pushSpecies", "squid");
+  // 預覽：兩者的話先看軟絲，魚的話看魚
+  const previewSpecies = species === "fish" ? "fish" : "squid";
+  const preview = useApi<Preview>(`/push/preview?species=${previewSpecies}`);
 
   useEffect(() => {
     pushState().then(setState).catch(() => setState("unsupported"));
@@ -34,7 +40,7 @@ export default function PushCard() {
     setBusy(true);
     setMsg("");
     try {
-      setState(on ? await enablePush() : await disablePush());
+      setState(on ? await enablePush(species) : await disablePush());
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {
@@ -62,6 +68,27 @@ export default function PushCard() {
         <Typography sx={{ fontSize: 13, color: TEXT.secondary, lineHeight: 1.6 }}>
           每天下午 3 點檢查接下來 24 小時，有<b>評分 55 以上</b>、而且<b>風、陣風、浪都在建議區間內</b>的時段才會通知，一天最多一則；條件不好的日子不會吵你。
         </Typography>
+        <Box>
+          <Typography sx={{ fontSize: 12, color: TEXT.secondary, fontWeight: 600, mb: 0.75 }}>要通知哪一種</Typography>
+          <ToggleButtonGroup
+            size="small" exclusive fullWidth value={species}
+            onChange={async (_, v: PushSpeciesPick | null) => {
+              if (!v) return;
+              setSpecies(v);
+              if (state === "on") {
+                try {
+                  await setPushSpecies(v);
+                } catch (e) {
+                  setMsg(e instanceof Error ? e.message : String(e));
+                }
+              }
+            }}
+          >
+            <ToggleButton value="squid">軟絲</ToggleButton>
+            <ToggleButton value="fish">魚</ToggleButton>
+            <ToggleButton value="both">兩者</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
         {state && HINT[state] && <Alert severity={state === "denied" || state === "no-key" ? "warning" : "info"}>{HINT[state]}</Alert>}
         {state === "on" && (
           <Button variant="outlined" size="small" onClick={test} disabled={busy} sx={{ alignSelf: "flex-start" }}>
@@ -70,7 +97,7 @@ export default function PushCard() {
         )}
         {msg && <Typography sx={{ fontSize: 13 }}>{msg}</Typography>}
         <Box sx={{ bgcolor: "rgba(148,163,184,0.06)", borderRadius: 2, p: 1.5 }}>
-          <Typography sx={{ fontSize: 12, color: TEXT.secondary, fontWeight: 700, mb: 0.5 }}>如果現在檢查，會通知：</Typography>
+          <Typography sx={{ fontSize: 12, color: TEXT.secondary, fontWeight: 700, mb: 0.5 }}>如果現在檢查，{previewSpecies === "fish" ? "魚" : "軟絲"}會通知：</Typography>
           {preview.data?.message ? (
             <>
               <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>{preview.data.message.title}</Typography>

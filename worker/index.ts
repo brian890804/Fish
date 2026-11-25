@@ -65,6 +65,9 @@ interface TripInput {
   target?: Species;
 }
 
+type PushSpecies = "squid" | "fish" | "both";
+const PUSH_SPECIES: PushSpecies[] = ["squid", "fish", "both"];
+
 interface CatchInput {
   trip_id: number;
   caught_at: number;
@@ -497,13 +500,21 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     return json({ publicKey: env.VAPID_PUBLIC_KEY ?? null });
   }
   if (path === "/push/subscribe" && method === "POST") {
-    const { subscription } = await body<{ subscription: { endpoint: string; keys: { p256dh: string; auth: string } } }>(req);
+    const { subscription, species = "squid" } = await body<{ subscription: { endpoint: string; keys: { p256dh: string; auth: string } }; species?: PushSpecies }>(req);
     if (!subscription?.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) throw new HttpError(400, "訂閱資料不完整");
     if (!/^https:\/\//.test(subscription.endpoint)) throw new HttpError(400, "訂閱網址不正確");
+    if (!PUSH_SPECIES.includes(species)) throw new HttpError(400, "通知種類只能是軟絲、魚或兩者");
     await env.DB.prepare(
-      `INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_id) VALUES (?, ?, ?, ?)
-       ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth, user_id = excluded.user_id`,
-    ).bind(subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, uid).run();
+      `INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_id, species) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth, user_id = excluded.user_id, species = excluded.species`,
+    ).bind(subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, uid, species).run();
+    return json({ ok: true });
+  }
+  // 這台裝置要收哪一種的通知（軟絲、魚、兩者）
+  if (path === "/push/species" && method === "POST") {
+    const { endpoint, species } = await body<{ endpoint: string; species: PushSpecies }>(req);
+    if (!PUSH_SPECIES.includes(species)) throw new HttpError(400, "通知種類只能是軟絲、魚或兩者");
+    await env.DB.prepare("UPDATE push_subscriptions SET species = ? WHERE endpoint = ? AND user_id = ?").bind(species, endpoint ?? "", uid).run();
     return json({ ok: true });
   }
   if (path === "/push/unsubscribe" && method === "POST") {
@@ -513,7 +524,8 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   }
   // 預覽：現在檢查的話，會通知什麼（不會真的送出）
   if (path === "/push/preview" && method === "GET") {
-    return json(await planPush(env, uid));
+    const sp = url.searchParams.get("species") === "fish" ? "fish" : "squid";
+    return json(await planPush(env, uid, sp));
   }
   if (path === "/push/test" && method === "POST") {
     return json(await sendToAll(env, { title: "🦑 推播測試", body: "收得到這則通知，代表好時段推播設定成功了。" }, uid));
@@ -527,14 +539,20 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
 }
 
 /** 看接下來 24 小時有沒有好時段 */
-async function planPush(env: Env, uid: number) {
+async function planPush(env: Env, uid: number, species: "squid" | "fish") {
   const now = Math.floor(Date.now() / 1000);
   const spot = await weatherSpotOf(env, await getSpot(env, null));
-  const history = await cached(env.DB, `u${uid}:history:${spot.id}:squid`, () =>
-    analyze(env.DB, { userId: uid, from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species: "squid" }),
-  );
+  const historyOf = (sp: "squid" | "fish") =>
+    cached(env.DB, `u${uid}:history:${spot.id}:${sp}`, () =>
+      analyze(env.DB, { userId: uid, from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species: sp }),
+    );
+  const [history, fishHistory] = await Promise.all([historyOf("squid"), historyOf("fish")]);
   const start = hourFloor(now) + 3600;
-  const hours = await forecast(env.DB, spot.id, start, start + 24 * 3600, history);
+  // 好時段判斷用這一種物種的分數（forecast 同時給軟絲 score、魚 fish_score）
+  const hours = (await forecast(env.DB, spot.id, start, start + 24 * 3600, history, fishHistory)).map((h) => ({
+    ...h,
+    score: species === "fish" ? h.fish_score : h.score,
+  }));
   const windows = goodWindows(hours, start, start + 24 * 3600);
   return {
     windows: windows.map((w) => ({ from: w.from, to: w.to, bestScore: w.bestScore })),
@@ -554,11 +572,14 @@ async function dailyPush(env: Env) {
   const { results: users } = await env.DB.prepare("SELECT DISTINCT user_id AS id FROM push_subscriptions").all<{ id: number }>();
   const lines: string[] = [];
   for (const { id } of users) {
-    const plan = await planPush(env, id);
-    if (!plan.message) continue;
-    const r = await sendToAll(env, plan.message, id);
-    lines.push(`${plan.message.title}｜${JSON.stringify(r)}`);
-    console.log("好時段推播", JSON.stringify({ user: id, ...plan.message, ...r }));
+    // 每一種物種各自判斷、只送給選了那種的裝置（選「兩者」的裝置兩種都會收到）
+    for (const sp of ["squid", "fish"] as const) {
+      const plan = await planPush(env, id, sp);
+      if (!plan.message) continue;
+      const r = await sendToAll(env, plan.message, id, sp);
+      lines.push(`[${sp === "fish" ? "魚" : "軟絲"}] ${plan.message.title}｜${JSON.stringify(r)}`);
+      console.log("好時段推播", JSON.stringify({ user: id, species: sp, ...plan.message, ...r }));
+    }
   }
   if (lines.length) await env.DB.prepare("UPDATE push_sent SET message = ? WHERE day = ?").bind(lines.join("\n"), day).run();
 }

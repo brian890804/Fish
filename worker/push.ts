@@ -75,11 +75,13 @@ export function describe(windows: Window[], spotName: string, now: number) {
   return { title, body };
 }
 
-export async function sendToAll(env: PushEnv, payload: { title: string; body: string; url?: string }, userId: number) {
+/** species：只送給選了這種物種（或選「兩者」）的裝置；不給就全部送 */
+export async function sendToAll(env: PushEnv, payload: { title: string; body: string; url?: string }, userId: number, species?: "squid" | "fish") {
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return { sent: 0, failed: 0, skipped: "沒有設定 VAPID 金鑰" };
   // 只通知這個帳號開啟通知的裝置
-  const { results } = await env.DB.prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?")
-    .bind(userId).all<{ endpoint: string; p256dh: string; auth: string }>();
+  const filter = species ? " AND (species = ? OR species = 'both')" : "";
+  const stmt = env.DB.prepare(`SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?${filter}`);
+  const { results } = await (species ? stmt.bind(userId, species) : stmt.bind(userId)).all<{ endpoint: string; p256dh: string; auth: string }>();
   let sent = 0;
   let failed = 0;
   for (const s of results) {
