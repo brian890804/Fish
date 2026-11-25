@@ -37,7 +37,10 @@ export interface ForecastHour extends WeatherHour {
   tide: TideState | null;
   moon_pct: number;
   moon_emoji: string;
+  /** 軟絲評分（用軟絲的紀錄算） */
   score: number | null;
+  /** 魚評分（用魚的紀錄算） */
+  fish_score: number | null;
 }
 
 export interface ForecastResponse {

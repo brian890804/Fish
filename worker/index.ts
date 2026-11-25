@@ -432,14 +432,15 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   if (path === "/forecast" && method === "GET") {
     const spot = await weatherSpotOf(env, await getSpot(env, Number(url.searchParams.get("spot")) || null));
     const days = Math.min(Number(url.searchParams.get("days") ?? 7), 10);
-    const species = (url.searchParams.get("species") ?? "squid") as Species;
     const today = twDate(Date.now() / 1000);
-    // 評分用所有共用這個天氣來源的釣點的紀錄
-    const history = await cached(env.DB, `u${uid}:history:${spot.id}:${species}`, () =>
-      analyze(env.DB, { userId: uid, from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species }),
-    );
+    // 軟絲、魚各用自己的紀錄評分；評分用所有共用這個天氣來源的釣點的紀錄
+    const historyOf = (species: Species) =>
+      cached(env.DB, `u${uid}:history:${spot.id}:${species}`, () =>
+        analyze(env.DB, { userId: uid, from: "2000-01-01", to: "2999-12-31", spotId: null, weatherSpotId: spot.id, species }),
+      );
+    const [history, fishHistory] = await Promise.all([historyOf("squid"), historyOf("fish")]);
     const from = twDayStart(today);
-    const hours = await forecast(env.DB, spot.id, from, from + days * 86400 - 3600, history);
+    const hours = await forecast(env.DB, spot.id, from, from + days * 86400 - 3600, history, fishHistory);
     const last = await env.DB.prepare(
       "SELECT updated_at AS t, source FROM weather_hourly WHERE spot_id = ? ORDER BY updated_at DESC, time DESC LIMIT 1",
     ).bind(spot.id).first<{ t: number; source: string }>();

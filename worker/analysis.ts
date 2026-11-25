@@ -217,7 +217,7 @@ export async function analyze(
 }
 
 /** 未來 N 天逐小時預報，附上月相、潮汐與依歷史資料算出的分數 */
-export async function forecast(db: D1Database, spotId: number, fromT: number, toT: number, history: AnalysisResult) {
+export async function forecast(db: D1Database, spotId: number, fromT: number, toT: number, history: AnalysisResult, fishHistory?: AnalysisResult) {
   const weather = (await weatherMap(db, spotId, fromT - 3600, toT + 3600)).get(spotId) ?? new Map();
   const tides = (await loadTideEvents(db, [spotId], fromT, toT)).get(spotId) ?? [];
   const hours = [];
@@ -233,6 +233,8 @@ export async function forecast(db: D1Database, spotId: number, fromT: number, to
       moon_emoji: moon.emoji,
       // 一般經驗＋你的紀錄：紀錄越多，越以你的紀錄為主
       score: blendedScore(cond, history.factors, history.rate, history.hours),
+      // 魚用魚自己的紀錄評分（沒有傳魚的紀錄就不算）
+      fish_score: fishHistory ? blendedScore(cond, fishHistory.factors, fishHistory.rate, fishHistory.hours) : null,
     });
   }
   return hours;

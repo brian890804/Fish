@@ -88,8 +88,13 @@ const InfoLabel = ({ text, info, label }: { text: string; info: React.ReactNode;
 
 const ROWS: Row[] = [
   {
-    key: "score", label: <InfoLabel text="評分" info={SCORE_INFO} label="評分說明" />,
+    key: "score", label: <InfoLabel text="軟絲" info={SCORE_INFO} label="評分說明" />,
     render: (h) => h.score ?? "-", bg: (h) => (h.score == null ? undefined : scoreColor(h.score)),
+  },
+  // 魚的評分只用魚的紀錄算（魚多半早上釣，跟軟絲的時段不同）
+  {
+    key: "fish_score", label: "魚",
+    render: (h) => h.fish_score ?? "-", bg: (h) => (h.fish_score == null ? undefined : scoreColor(h.fish_score)),
   },
   { key: "wind", label: "風速", unit: "kn", render: (h) => kn(h.wind_ms) ?? "-", bg: (h) => windColor(kn(h.wind_ms)) },
   { key: "gust", label: "陣風", unit: "kn", render: (h) => kn(h.gust_ms) ?? "-", bg: (h) => windColor(kn(h.gust_ms)) },
@@ -180,7 +185,12 @@ function ForecastTableInner({
   const cols = hours.filter((h) => h.time >= nowHour - 3600 * (step - 1) && dayjs.unix(h.time).hour() % step === 0);
   if (cols.length === 0) return <Typography color="text.secondary" sx={{ px: 2 }}>還沒有預報資料</Typography>;
 
-  const rows = cols.some((h) => h.score != null) ? ROWS : ROWS.filter((r) => r.key !== "score");
+  // 沒有評分（還沒有紀錄或天氣）的列不顯示
+  const rows = ROWS.filter((r) => {
+    if (r.key === "score") return cols.some((h) => h.score != null);
+    if (r.key === "fish_score") return cols.some((h) => h.fish_score != null);
+    return true;
+  });
 
   const cell = {
     width: cellWidth, minWidth: cellWidth, height: rowHeight, display: "flex", alignItems: "center", justifyContent: "center",
