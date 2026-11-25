@@ -1,6 +1,7 @@
 import { useState } from "react";
 import dayjs from "dayjs";
 import { useApi } from "../lib/api";
+import { useStoredState } from "../lib/prefs";
 import type { Analysis } from "../lib/types";
 
 export type Preset = "30" | "90" | "year" | "all" | "custom";
@@ -24,7 +25,8 @@ function rangeOf(p: Preset, custom: { from: string; to: string }) {
 export function useAnalysis() {
   const [preset, setPreset] = useState<Preset>("90");
   const [custom, setCustom] = useState({ from: dayjs().subtract(30, "day").format("YYYY-MM-DD"), to: dayjs().format("YYYY-MM-DD") });
-  const [species, setSpecies] = useState<SpeciesFilter>("squid");
+  // 跟今天頁共用同一個軟絲／魚選擇（記在這台裝置上）
+  const [species, setSpecies] = useStoredState<"squid" | "fish">("fish.species", "squid");
   const r = rangeOf(preset, custom);
   const query = useApi<Analysis>(`/analysis?from=${r.from}&to=${r.to}&species=${species}`);
 

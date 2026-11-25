@@ -1,6 +1,6 @@
 import { Alert, Box, Card, CardContent, Skeleton, Typography } from "@mui/material";
 import { useAnalysis } from "../hooks/useAnalysis";
-import AnalysisFilters from "../components/analysis/AnalysisFilters";
+import AnalysisFilters, { SpeciesSwitch } from "../components/analysis/AnalysisFilters";
 import SummaryTiles from "../components/analysis/SummaryTiles";
 import Highlights from "../components/analysis/Highlights";
 import EgiCard from "../components/analysis/EgiCard";
@@ -13,8 +13,8 @@ export default function AnalysisPage({ onOpenDate }: { onOpenDate?: (d: string) 
   const { data } = a;
   return (
     <>
-      <PageHeader title="釣況分析" subtitle="依照區間彙總，找出什麼條件下比較好釣" />
-      <Box sx={{ mb: 2.5 }}><RecordsCard onOpenDate={onOpenDate} species={a.species === "fish" ? "fish" : "squid"} /></Box>
+      <PageHeader title="釣況分析" subtitle="依照區間彙總，找出什麼條件下比較好釣" actions={<SpeciesSwitch a={a} fullWidth={false} />} />
+      <Box sx={{ mb: 2.5 }}><RecordsCard onOpenDate={onOpenDate} species={a.species} /></Box>
       <Card sx={{ mb: 2.5 }}>
         <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
           <AnalysisFilters a={a} inline />

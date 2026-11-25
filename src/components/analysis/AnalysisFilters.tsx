@@ -4,14 +4,18 @@ import { SpeciesIcon } from "../icons";
 
 type A = ReturnType<typeof useAnalysis>;
 
-export default function AnalysisFilters({ a, inline = false }: { a: A; inline?: boolean }) {
-  const species = (
-    <ToggleButtonGroup exclusive fullWidth={!inline} size="small" value={a.species} onChange={(_, v) => v && a.setSpecies(v)}>
+/** 分析頁最上面的軟絲／魚切換：整頁（紀錄、條件分析）都跟著換 */
+export function SpeciesSwitch({ a, fullWidth = true }: { a: A; fullWidth?: boolean }) {
+  return (
+    <ToggleButtonGroup exclusive fullWidth={fullWidth} size="small" value={a.species} onChange={(_, v) => v && a.setSpecies(v)}>
       <ToggleButton value="squid" sx={{ gap: 0.5, px: 2 }}><SpeciesIcon species="squid" fontSize="small" />軟絲</ToggleButton>
       <ToggleButton value="fish" sx={{ gap: 0.5, px: 2 }}><SpeciesIcon species="fish" fontSize="small" />魚</ToggleButton>
-      <ToggleButton value="all" sx={{ px: 2 }}>全部</ToggleButton>
     </ToggleButtonGroup>
   );
+}
+
+/** 期間篩選（近 30 天、近 90 天…） */
+export default function AnalysisFilters({ a, inline = false }: { a: A; inline?: boolean }) {
   const custom = a.preset === "custom" && (
     <Box sx={{ display: "flex", gap: 1 }}>
       <TextField type="date" size="small" label="從" value={a.custom.from} onChange={(e) => a.setCustom({ ...a.custom, from: e.target.value })} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
@@ -30,8 +34,6 @@ export default function AnalysisFilters({ a, inline = false }: { a: A; inline?: 
       <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
         {chips}
         {custom}
-        <Box sx={{ flex: 1 }} />
-        {species}
       </Box>
     );
   }
@@ -39,7 +41,6 @@ export default function AnalysisFilters({ a, inline = false }: { a: A; inline?: 
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {chips}
       {custom}
-      {species}
     </Box>
   );
 }

@@ -1,6 +1,6 @@
 import { Box, Typography, Skeleton, Alert } from "@mui/material";
 import { useAnalysis } from "../hooks/useAnalysis";
-import AnalysisFilters from "../components/analysis/AnalysisFilters";
+import AnalysisFilters, { SpeciesSwitch } from "../components/analysis/AnalysisFilters";
 import SummaryTiles from "../components/analysis/SummaryTiles";
 import Highlights from "../components/analysis/Highlights";
 import EgiCard from "../components/analysis/EgiCard";
@@ -13,7 +13,8 @@ export default function AnalysisPage({ onOpenDate }: { onOpenDate?: (d: string) 
   return (
     <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
       <Typography variant="h5">釣況分析</Typography>
-      <RecordsCard onOpenDate={onOpenDate} species={a.species === "fish" ? "fish" : "squid"} />
+      <SpeciesSwitch a={a} />
+      <RecordsCard onOpenDate={onOpenDate} species={a.species} />
       <AnalysisFilters a={a} />
       {a.error && <Alert severity="error">{a.error.message}</Alert>}
       {a.isLoading || !data ? (
