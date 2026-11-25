@@ -6,19 +6,26 @@ import { photoUrl, useApi } from "../../lib/api";
 import { TEXT, SURFACE } from "../../theme";
 import { EgiDot } from "../EgiColorPicker";
 import LazyImage from "../LazyImage";
-import { SquidIcon } from "../icons";
+import { SpeciesIcon } from "../icons";
+import PhotoViewer from "../PhotoViewer";
+import { useState } from "react";
 
 interface Records {
-  top: { id: number; caught_at: number; length_cm: number; weight_g: number | null; egi_color: string | null; photo_key: string | null; date: string; spot_name: string }[];
+  top: { id: number; caught_at: number; length_cm: number; weight_g: number | null; egi_color: string | null; photo_key: string | null; photo_keys?: string[]; date: string; spot_name: string }[];
   months: { month: string; catches: number; measured: number; avg_cm: number | null; max_cm: number | null; trips: number }[];
 }
 
 const MEDAL = ["#fbbf24", "#cbd5e1", "#d97706"];
 
-/** 個人紀錄：最大隻排行＋每月平均胴長與數量（看季節性） */
-/** onOpenDate：點排行榜的某一筆，打開那天的出釣紀錄 */
-export default function RecordsCard({ onOpenDate }: { onOpenDate?: (date: string) => void }) {
-  const { data } = useApi<Records>("/records?species=squid");
+/**
+ * 個人紀錄：最大隻排行＋每月平均胴長與數量（看季節性）。
+ * species：看軟絲或魚的紀錄（跟分析頁上方的篩選一致）。
+ * 點縮圖直接看照片；點其他地方打開那天的出釣紀錄（onOpenDate）。
+ */
+export default function RecordsCard({ onOpenDate, species = "squid" }: { onOpenDate?: (date: string) => void; species?: "squid" | "fish" }) {
+  const { data } = useApi<Records>(`/records?species=${species}`);
+  const [viewing, setViewing] = useState<string[] | null>(null);
+  const label = species === "fish" ? "魚" : "軟絲";
 
   if (!data) return <Skeleton variant="rounded" height={260} sx={{ borderRadius: 4 }} />;
   const months = data.months.slice(-12);
@@ -28,35 +35,52 @@ export default function RecordsCard({ onOpenDate }: { onOpenDate?: (date: string
   return (
     <Card>
       <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <Typography variant="h6">軟絲紀錄</Typography>
+        <Typography variant="h6">{label}紀錄</Typography>
 
         {/* 最大隻排行 */}
         {data.top.length === 0 ? (
-          <Typography sx={{ fontSize: 13, color: TEXT.secondary }}>還沒有量過胴長的軟絲。記錄時填上胴長，這裡就會出現你的最大隻排行。</Typography>
+          <Typography sx={{ fontSize: 13, color: TEXT.secondary }}>還沒有量過長度的{label}。記錄時填上長度，這裡就會出現你的最大隻排行。</Typography>
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {data.top.map((c, i) => (
-              <ButtonBase
+            {data.top.map((c, i) => {
+              const photos = c.photo_keys?.length ? c.photo_keys : c.photo_key ? [c.photo_key] : [];
+              return (
+              <Box
                 key={c.id}
-                onClick={() => onOpenDate?.(c.date)}
-                disabled={!onOpenDate}
-                aria-label={`打開 ${dayjs(c.date).format("M/D")} 的出釣紀錄`}
                 sx={{
-                  display: "flex", alignItems: "center", gap: 1.5, p: 1, borderRadius: 2.5, width: "100%", textAlign: "left", justifyContent: "flex-start",
+                  display: "flex", alignItems: "center", gap: 1.5, p: 1, borderRadius: 2.5, width: "100%",
                   bgcolor: i === 0 ? "rgba(251,191,36,0.08)" : SURFACE.raised,
-                  transition: "background-color .15s, transform .1s",
+                  transition: "background-color .15s",
                   "&:hover": { bgcolor: i === 0 ? "rgba(251,191,36,0.14)" : "rgba(148,163,184,0.14)" },
-                  "&:active": { transform: "scale(0.99)" },
                 }}
               >
                 <Box sx={{ width: 28, textAlign: "center", flexShrink: 0 }}>
                   {i < 3 ? <EmojiEventsIcon sx={{ color: MEDAL[i], fontSize: 24 }} /> : <Typography sx={{ fontWeight: 800, color: TEXT.secondary }}>{i + 1}</Typography>}
                 </Box>
-                {c.photo_key ? (
-                  <LazyImage src={photoUrl(c.photo_key, "thumb")} sx={{ width: 44, height: 44, borderRadius: 1.5, objectFit: "cover", flexShrink: 0 }} />
+                {photos.length > 0 ? (
+                  // 點縮圖：直接全螢幕看照片（不會跳去那天）
+                  <ButtonBase
+                    onClick={() => setViewing(photos)}
+                    aria-label={`看 ${photos.length} 張照片`}
+                    sx={{ position: "relative", width: 44, height: 44, borderRadius: 1.5, overflow: "hidden", flexShrink: 0 }}
+                  >
+                    <LazyImage src={photoUrl(photos[0], "thumb")} sx={{ width: 44, height: 44, objectFit: "cover", display: "block" }} />
+                    {photos.length > 1 && (
+                      <Box sx={{ position: "absolute", right: 2, bottom: 2, fontSize: 10, fontWeight: 800, px: 0.5, borderRadius: 1, bgcolor: "rgba(0,0,0,0.65)", color: "#fff", lineHeight: 1.5 }}>
+                        +{photos.length - 1}
+                      </Box>
+                    )}
+                  </ButtonBase>
                 ) : (
-                  <Box sx={{ width: 44, height: 44, display: "grid", placeItems: "center", flexShrink: 0 }}><SquidIcon sx={{ fontSize: 36 }} /></Box>
+                  <Box sx={{ width: 44, height: 44, display: "grid", placeItems: "center", flexShrink: 0 }}><SpeciesIcon species={species} sx={{ fontSize: 36 }} /></Box>
                 )}
+                {/* 點其他地方：打開那天的出釣紀錄 */}
+                <ButtonBase
+                  onClick={() => onOpenDate?.(c.date)}
+                  disabled={!onOpenDate}
+                  aria-label={`打開 ${dayjs(c.date).format("M/D")} 的出釣紀錄`}
+                  sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 1, textAlign: "left", justifyContent: "flex-start", borderRadius: 1.5, "&:active": { transform: "scale(0.99)" } }}
+                >
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                     <Typography sx={{ fontWeight: 900, fontSize: i === 0 ? 22 : 18, lineHeight: 1.1 }}>{c.length_cm} cm</Typography>
@@ -68,8 +92,10 @@ export default function RecordsCard({ onOpenDate }: { onOpenDate?: (date: string
                   </Typography>
                 </Box>
                 {onOpenDate && <ChevronIcon sx={{ color: TEXT.muted, flexShrink: 0 }} />}
-              </ButtonBase>
-            ))}
+                </ButtonBase>
+              </Box>
+              );
+            })}
           </Box>
         )}
 
@@ -99,6 +125,7 @@ export default function RecordsCard({ onOpenDate }: { onOpenDate?: (date: string
           </Box>
         )}
       </CardContent>
+      <PhotoViewer keys={viewing} onClose={() => setViewing(null)} />
     </Card>
   );
 }

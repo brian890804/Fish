@@ -474,7 +474,7 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   if (path === "/records" && method === "GET") {
     const species = url.searchParams.get("species") === "fish" ? "fish" : "squid";
     const { results: top } = await env.DB.prepare(
-      `SELECT c.id, c.caught_at, c.length_cm, c.weight_g, c.egi_color, c.photo_key, t.date, s.name AS spot_name
+      `SELECT c.id, c.caught_at, c.length_cm, c.weight_g, c.egi_color, c.photo_key, c.photo_keys, t.date, s.name AS spot_name
          FROM catches c JOIN trips t ON t.id = c.trip_id JOIN spots s ON s.id = t.spot_id
         WHERE t.user_id = ? AND c.species = ? AND c.length_cm IS NOT NULL
         ORDER BY c.length_cm DESC, c.caught_at LIMIT 5`,
@@ -496,7 +496,8 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const tripMap = new Map(tripsByMonth.map((r) => [r.month, r.trips]));
     return json({
       species,
-      top,
+      // 每一筆附上全部照片（點縮圖可以直接左右滑著看）
+      top: (top as { photo_key?: string | null; photo_keys?: string | null }[]).map((r) => ({ ...r, photo_keys: photoKeysOf(r) })),
       months: (months as { month: string }[]).map((m) => ({ ...m, trips: tripMap.get(m.month) ?? 0 })),
     });
   }

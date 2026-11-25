@@ -13,7 +13,7 @@ export default function AnalysisPage({ onOpenDate }: { onOpenDate?: (d: string) 
   return (
     <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
       <Typography variant="h5">釣況分析</Typography>
-      <RecordsCard onOpenDate={onOpenDate} />
+      <RecordsCard onOpenDate={onOpenDate} species={a.species === "fish" ? "fish" : "squid"} />
       <AnalysisFilters a={a} />
       {a.error && <Alert severity="error">{a.error.message}</Alert>}
       {a.isLoading || !data ? (

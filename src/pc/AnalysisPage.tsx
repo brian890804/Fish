@@ -14,7 +14,7 @@ export default function AnalysisPage({ onOpenDate }: { onOpenDate?: (d: string) 
   return (
     <>
       <PageHeader title="釣況分析" subtitle="依照區間彙總，找出什麼條件下比較好釣" />
-      <Box sx={{ mb: 2.5 }}><RecordsCard onOpenDate={onOpenDate} /></Box>
+      <Box sx={{ mb: 2.5 }}><RecordsCard onOpenDate={onOpenDate} species={a.species === "fish" ? "fish" : "squid"} /></Box>
       <Card sx={{ mb: 2.5 }}>
         <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
           <AnalysisFilters a={a} inline />
