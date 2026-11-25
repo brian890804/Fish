@@ -319,12 +319,18 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   if (path === "/calendar" && method === "GET") {
     const month = url.searchParams.get("month") ?? twDate(Date.now() / 1000).slice(0, 7);
     const { results } = await env.DB.prepare(
-      `SELECT t.date,
-              COUNT(DISTINCT t.id) AS trips,
-              SUM(CASE WHEN c.species = 'squid' THEN 1 ELSE 0 END) AS squid,
-              SUM(CASE WHEN c.species = 'fish' THEN 1 ELSE 0 END) AS fish
-         FROM trips t LEFT JOIN catches c ON c.trip_id = t.id
-        WHERE t.user_id = ? AND t.date LIKE ? GROUP BY t.date`,
+      // 先算每一趟的漁獲，再依日期加總；blank = 這天完全沒釣到的出釣趟數（槓龜）
+      `SELECT date,
+              COUNT(*) AS trips,
+              SUM(squid) AS squid,
+              SUM(fish) AS fish,
+              SUM(CASE WHEN squid + fish = 0 THEN 1 ELSE 0 END) AS blank
+         FROM (SELECT t.id, t.date,
+                      SUM(CASE WHEN c.species = 'squid' THEN 1 ELSE 0 END) AS squid,
+                      SUM(CASE WHEN c.species = 'fish' THEN 1 ELSE 0 END) AS fish
+                 FROM trips t LEFT JOIN catches c ON c.trip_id = t.id
+                WHERE t.user_id = ? AND t.date LIKE ? GROUP BY t.id)
+        GROUP BY date`,
     ).bind(uid, `${month}-%`).all();
     return json(results);
   }

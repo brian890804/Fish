@@ -5,8 +5,7 @@ import NextIcon from "@mui/icons-material/ChevronRightRounded";
 import dayjs from "dayjs";
 import { useCalendar } from "../hooks/useCalendar";
 import MonthGrid from "../components/MonthGrid";
-import CatchCount from "../components/CatchCount";
-import BlankCount from "../components/BlankCount";
+import MonthSummary from "../components/MonthSummary";
 import DayDetail from "../components/DayDetail";
 import PageHeader from "./PageHeader";
 
@@ -37,15 +36,8 @@ export default function CalendarPage() {
       <Box sx={{ display: "grid", gridTemplateColumns: { md: "1fr", lg: "minmax(0, 1fr) 420px" }, gap: 2.5, alignItems: "start" }}>
         <Card>
           <CardContent sx={{ p: 3 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 2.5, flexWrap: "wrap" }}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">本月出釣</Typography>
-                <Typography sx={{ fontWeight: 800, fontSize: 24 }}>{cal.totals.trips} 次</Typography>
-              </Box>
-              <Box sx={{ flex: 1 }} />
-              <CatchCount species="squid" count={cal.totals.squid} size={40} />
-              {cal.totals.fish > 0 && <CatchCount species="fish" count={cal.totals.fish} size={34} />}
-              <BlankCount count={cal.totals.blank} size={34} />
+            <Box sx={{ mb: 2.5 }}>
+              <MonthSummary totals={cal.totals} size="lg" />
             </Box>
             <MonthGrid cells={cal.cells} byDate={cal.byDate} selected={selected} onSelect={setSelected} size="lg" />
           </CardContent>

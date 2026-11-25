@@ -4,9 +4,8 @@ import PrevIcon from "@mui/icons-material/ChevronLeftRounded";
 import NextIcon from "@mui/icons-material/ChevronRightRounded";
 import dayjs from "dayjs";
 import { useCalendar } from "../hooks/useCalendar";
-import CatchCount from "../components/CatchCount";
 import MonthGrid from "../components/MonthGrid";
-import BlankCount from "../components/BlankCount";
+import MonthSummary from "../components/MonthSummary";
 
 export default function CalendarPage({ onOpenDate }: { onOpenDate: (d: string) => void }) {
   const [month, setMonth] = useState(() => dayjs().startOf("month"));
@@ -20,14 +19,8 @@ export default function CalendarPage({ onOpenDate }: { onOpenDate: (d: string) =
         <IconButton onClick={() => setMonth(month.add(1, "month"))}><NextIcon /></IconButton>
       </Box>
       <Card>
-        <CardContent sx={{ display: "flex", alignItems: "center", gap: 2, py: "12px !important" }}>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="caption" color="text.secondary">本月出釣</Typography>
-            <Typography sx={{ fontWeight: 800, fontSize: 22 }}>{cal.totals.trips} 次</Typography>
-          </Box>
-          <CatchCount species="squid" count={cal.totals.squid} size={34} />
-          {cal.totals.fish > 0 && <CatchCount species="fish" count={cal.totals.fish} size={34} />}
-          <BlankCount count={cal.totals.blank} size={30} />
+        <CardContent sx={{ py: "12px !important" }}>
+          <MonthSummary totals={cal.totals} />
         </CardContent>
       </Card>
       <MonthGrid cells={cal.cells} byDate={cal.byDate} onSelect={onOpenDate} />

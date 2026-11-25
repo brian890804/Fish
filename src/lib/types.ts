@@ -97,6 +97,8 @@ export interface CalendarDay {
   trips: number;
   squid: number;
   fish: number;
+  /** 這天沒釣到任何東西的出釣趟數（舊的快取資料可能沒有） */
+  blank?: number;
 }
 
 export interface Analysis {
