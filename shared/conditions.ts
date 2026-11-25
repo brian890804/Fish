@@ -280,14 +280,18 @@ export function scoreHour(c: HourConditions, factors: FactorStat[], overallRate:
 }
 
 // ---------------- 一般經驗（先驗）評分 ----------------
-// 還沒有足夠的個人紀錄時，用岸邊餌木釣軟絲的一般經驗打分；
+// 還沒有足夠的個人紀錄時，用一般經驗打分；軟絲與魚各一套（時段、浪的偏好不同）。
 // 個人紀錄越多，越以個人紀錄為主（見 blendedScore）。
 
 /** 個人紀錄要累積多少小時，權重才跟一般經驗各半 */
 export const PRIOR_HOURS = 10;
 
+export type PriorSpecies = "squid" | "fish";
+
 /** 每個條件的倍率：>1 比平常好、<1 比平常差 */
-function priorRatios(c: HourConditions): number[] {
+function priorRatios(c: HourConditions, species: PriorSpecies = "squid"): number[] {
+  if (species === "fish") return fishPriorRatios(c);
+  // 岸邊餌木釣軟絲
   const r: number[] = [];
   const windKn = c.wind_ms == null ? null : c.wind_ms * 1.943844;
   if (windKn != null) r.push(windKn <= 8 ? 1.3 : windKn <= 12 ? 1.1 : windKn <= 15 ? 0.8 : windKn <= 20 ? 0.45 : 0.25);
@@ -301,9 +305,29 @@ function priorRatios(c: HourConditions): number[] {
   return r;
 }
 
+/**
+ * 岸邊／磯釣釣魚的一般經驗（還沒有魚的紀錄時用）：
+ * - 時段：清晨到上午最好，傍晚次之，半夜與正中午較差（跟軟絲相反，軟絲是傍晚到前半夜）。
+ * - 浪：有一點白浪（0.5–1.5 m）魚比較敢靠岸覓食；太平靜略差，超過 2 m 危險也難釣。
+ * - 風、雨、海溫、潮汐的方向跟軟絲差不多，但影響稍小。
+ * 這些是一般經驗值，累積自己的魚紀錄後會逐漸以紀錄為主。
+ */
+function fishPriorRatios(c: HourConditions): number[] {
+  const r: number[] = [];
+  const windKn = c.wind_ms == null ? null : c.wind_ms * 1.943844;
+  if (windKn != null) r.push(windKn <= 10 ? 1.15 : windKn <= 15 ? 0.9 : windKn <= 20 ? 0.5 : 0.25);
+  if (c.wave_m != null) r.push(c.wave_m < 0.3 ? 0.85 : c.wave_m < 0.5 ? 1.0 : c.wave_m <= 1.5 ? 1.25 : c.wave_m <= 2 ? 0.7 : 0.3);
+  const h = twHour(c.time);
+  r.push(h >= 5 && h <= 8 ? 1.5 : h >= 9 && h <= 10 ? 1.2 : h >= 15 && h <= 18 ? 1.2 : h >= 11 && h <= 14 ? 0.75 : h >= 19 && h <= 22 ? 0.85 : 0.65);
+  if (c.tide) r.push({ rising: 1.2, high: 1.15, falling: 1.0, low: 0.85 }[c.tide]);
+  if (c.precip_mm != null) r.push(c.precip_mm >= 2 ? 0.75 : 1);
+  if (c.sea_temp_c != null) r.push(c.sea_temp_c < 17 ? 0.7 : c.sea_temp_c < 19 ? 0.9 : 1.05);
+  return r;
+}
+
 /** 只用一般經驗的分數（0–100，50 = 普通） */
-export function priorScore(c: HourConditions): number {
-  const product = priorRatios(c).reduce((a, b) => a * b, 1);
+export function priorScore(c: HourConditions, species: PriorSpecies = "squid"): number {
+  const product = priorRatios(c, species).reduce((a, b) => a * b, 1);
   return ratioToScore(Math.pow(product, 0.6));
 }
 
@@ -311,8 +335,8 @@ export function priorScore(c: HourConditions): number {
 export const personalWeight = (historyHours: number) => historyHours / (historyHours + PRIOR_HOURS);
 
 /** 一般經驗與個人紀錄混合後的分數 */
-export function blendedScore(c: HourConditions, factors: FactorStat[], overallRate: number, historyHours: number): number {
-  const prior = priorScore(c);
+export function blendedScore(c: HourConditions, factors: FactorStat[], overallRate: number, historyHours: number, species: PriorSpecies = "squid"): number {
+  const prior = priorScore(c, species);
   const personal = historyHours > 0 ? scoreHour(c, factors, overallRate) : null;
   if (personal == null) return prior;
   const w = personalWeight(historyHours);

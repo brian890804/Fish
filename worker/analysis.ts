@@ -237,7 +237,7 @@ export async function forecast(db: D1Database, spotId: number, fromT: number, to
       // 一般經驗＋你的紀錄：紀錄越多，越以你的紀錄為主
       score: blendedScore(cond, history.factors, history.rate, history.hours),
       // 魚用魚自己的紀錄評分（沒有傳魚的紀錄就不算）
-      fish_score: fishHistory ? blendedScore(cond, fishHistory.factors, fishHistory.rate, fishHistory.hours) : null,
+      fish_score: fishHistory ? blendedScore(cond, fishHistory.factors, fishHistory.rate, fishHistory.hours, "fish") : null,
     });
   }
   return hours;
