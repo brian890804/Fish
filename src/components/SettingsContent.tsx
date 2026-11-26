@@ -65,7 +65,7 @@ function SpotEditor({ spot, spots, onSaved }: { spot?: Spot; spots: Spot[]; onSa
         ))}
         <MenuItem value={OWN}>自己抓天氣</MenuItem>
       </TextField>
-      {/* 位置：自己抓天氣時是天氣座標；共用天氣時只用來「自動判斷釣點」 */}
+      {/* 位置：自己抓天氣時是抓天氣的座標；也用在「新增今天的出釣時，依定位自動選最近的釣點」（2 公里內） */}
       <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
         <TextField size="small" label="緯度" value={lat} onChange={(e) => setLat(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
         <TextField size="small" label="經度" value={lon} onChange={(e) => setLon(e.target.value)} slotProps={{ htmlInput: { inputMode: "decimal" } }} />
@@ -75,7 +75,10 @@ function SpotEditor({ spot, spots, onSaved }: { spot?: Spot; spots: Spot[]; onSa
           用目前位置
         </Button>
         <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
-          {locMsg || (spot && !hasOwnLocation(spot, spots) ? "還沒設定位置，到這個釣點時按一下" : "到了釣點按一下，之後會自動選這個釣點")}
+          {locMsg ||
+            (spot && !hasOwnLocation(spot, spots)
+              ? "這個釣點還沒有自己的座標（目前沿用天氣來源的），新增出釣時不會依定位自動選到它"
+              : "新增今天的出釣時，人在這個座標 2 公里內會自動選這個釣點")}
         </Typography>
       </Box>
       {own && (

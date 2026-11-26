@@ -68,7 +68,7 @@ export default function Sidebar({ tab, onChange }: { tab: AppTab; onChange: (t: 
       <Box sx={{ borderRadius: 3, p: 1.5, bgcolor: "#111923", border: 1, borderColor: "divider" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <PlaceIcon fontSize="small" color="primary" />
-          <Typography sx={{ fontWeight: 700, flex: 1 }} noWrap>{t.fc.data?.spot.name ?? "…"}</Typography>
+          <Typography sx={{ fontWeight: 700, flex: 1 }} noWrap>{t.spot?.name ?? t.fc.data?.spot.name ?? "…"}</Typography>
           <Tooltip title="立即更新天氣">
             <span>
               <IconButton size="small" onClick={t.refresh} disabled={t.refreshing}><RefreshIcon fontSize="small" sx={spinSx(t.refreshing)} /></IconButton>

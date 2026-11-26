@@ -5,6 +5,7 @@ import type { DayDetail, ForecastHour, ForecastResponse } from "../lib/types";
 import { ADVICE } from "../lib/advice";
 import { kn } from "../lib/format";
 import { useStoredState } from "../lib/prefs";
+import { useSpots } from "./useSpots";
 
 /** 全站共用的物種選擇（記在這台裝置上）：評分、現在卡、較好的時段都依它顯示 */
 export type SpeciesPick = "squid" | "fish";
@@ -20,7 +21,12 @@ const REFRESH_MS = 20 * 60 * 1000;
 /** 今天頁／總覽共用：預報、今日釣獲、手動更新 */
 export function useToday() {
   const today = dayjs().format("YYYY-MM-DD");
-  const fc = useApi<ForecastResponse>("/forecast?days=7", { refreshInterval: REFRESH_MS });
+  // 首頁要看哪個釣點（記在這台裝置上）；沒選或釣點被刪掉就用預設釣點
+  const spots = useSpots();
+  const [pickedId, setSpotId] = useStoredState<number | null>("fish.spot", null);
+  const list = spots.data ?? [];
+  const spot = list.find((s) => s.id === pickedId) ?? list.find((s) => s.is_default) ?? list[0] ?? null;
+  const fc = useApi<ForecastResponse>(spots.data ? `/forecast?days=7${spot ? `&spot=${spot.id}` : ""}` : null, { refreshInterval: REFRESH_MS });
   const [species, setSpecies] = useStoredState<SpeciesPick>("fish.species", "squid");
   // 夜釣跨過午夜：前一天開始、還在進行的那趟也算進「今日釣獲」
   const day = useApi<DayDetail>(`/day?date=${today}&overnight=1`);
@@ -64,6 +70,9 @@ export function useToday() {
     refreshing,
     species,
     setSpecies,
+    spots: list,
+    spot,
+    setSpotId,
     hours,
     now,
     best,

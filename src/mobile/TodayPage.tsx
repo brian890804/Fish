@@ -8,6 +8,7 @@ import dayjs from "dayjs";
 import { useToday } from "../hooks/useToday";
 import ForecastTable from "../components/ForecastTable";
 import { SpeciesIcon } from "../components/icons";
+import SpotPicker from "../components/SpotPicker";
 import CatchCount from "../components/CatchCount";
 import ConditionsGrid from "../components/ConditionsGrid";
 import SunMoonRow from "../components/SunMoonRow";
@@ -25,9 +26,10 @@ export default function TodayPage({ onOpenDate }: { onOpenDate: (d: string) => v
       <Box sx={{ display: "flex", alignItems: "center" }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: 13, color: TEXT.secondary, fontWeight: 600 }}>{dayjs().format("M月D日 dddd")}</Typography>
-          <Typography sx={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{t.fc.data?.spot.name ?? "釣況"}</Typography>
+          <SpotPicker spots={t.spots} value={t.spot} onChange={t.setSpotId} />
           <Typography sx={{ fontSize: 12, color: TEXT.muted }}>
             {t.fc.data?.updatedAt ? `預報 ${dayjs.unix(t.fc.data.updatedAt).format("HH:mm")} 更新` : ""}
+            {t.spot && t.fc.data && t.fc.data.spot.id !== t.spot.id && ` · 天氣：${t.fc.data.spot.name}`}
             {t.sourceLabel && ` · ${t.sourceLabel}`}
           </Typography>
         </Box>

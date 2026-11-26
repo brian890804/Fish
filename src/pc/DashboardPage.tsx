@@ -14,6 +14,7 @@ import CatchCount from "../components/CatchCount";
 import ForecastTable from "../components/ForecastTable";
 import DailyOutlook from "../components/DailyOutlook";
 import { SpeciesIcon } from "../components/icons";
+import SpotPicker from "../components/SpotPicker";
 import { TurtleIcon } from "../components/icons";
 import BlankCount from "../components/BlankCount";
 import PageHeader from "./PageHeader";
@@ -36,9 +37,11 @@ export default function DashboardPage({ onOpenDate, onGoCalendar }: { onOpenDate
     <>
       <PageHeader
         title={greeting()}
-        subtitle={`${dayjs().format("YYYY 年 M 月 D 日 dddd")} · ${t.fc.data?.spot.name ?? ""}`}
+        subtitle={dayjs().format("YYYY 年 M 月 D 日 dddd")}
         actions={
-          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
+            {/* 要看哪個釣點的預報 */}
+            <SpotPicker spots={t.spots} value={t.spot} onChange={t.setSpotId} fontSize={18} />
             {/* 看哪一種的評分：軟絲或魚（整個總覽都跟著這個切換） */}
             <ToggleButtonGroup size="small" exclusive value={t.species} onChange={(_, v) => v && t.setSpecies(v)}>
               <ToggleButton value="squid"><SpeciesIcon species="squid" sx={{ fontSize: 18, mr: 0.75 }} />軟絲</ToggleButton>
