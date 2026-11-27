@@ -32,7 +32,8 @@ export async function saveTideEvents(db: D1Database, spotId: number, events: Sto
   if (events.length === 0) return 0;
   const stmt = db.prepare(
     `INSERT INTO tide_events (spot_id, time, type, height_cm, source) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(spot_id, time) DO UPDATE SET type = excluded.type, height_cm = excluded.height_cm, source = excluded.source`,
+     ON CONFLICT(spot_id, time) DO UPDATE SET type = excluded.type, height_cm = excluded.height_cm, source = excluded.source
+     WHERE type IS NOT excluded.type OR height_cm IS NOT excluded.height_cm OR source IS NOT excluded.source`,
   );
   const batch = events.map((e) => stmt.bind(spotId, e.time, e.type, e.height_cm ?? null, e.source));
   for (let i = 0; i < batch.length; i += 100) await db.batch(batch.slice(i, i + 100));

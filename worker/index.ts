@@ -454,8 +454,9 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
     const from = twDayStart(today);
     const hours = await forecast(env.DB, spot.id, from, from + days * 86400 - 3600, history, fishHistory);
     const last = await env.DB.prepare(
-      "SELECT updated_at AS t, source FROM weather_hourly WHERE spot_id = ? ORDER BY updated_at DESC, time DESC LIMIT 1",
-    ).bind(spot.id).first<{ t: number; source: string }>();
+      // 只看預報期間的列（用主鍵範圍查），不用掃整個歷史
+      "SELECT updated_at AS t, source FROM weather_hourly WHERE spot_id = ? AND time >= ? ORDER BY updated_at DESC, time DESC LIMIT 1",
+    ).bind(spot.id, from).first<{ t: number; source: string }>();
     // 預報期間的滿潮／乾潮時間（表格標示用）
     const tideEvents = (await loadTideEvents(env.DB, [spot.id], from, from + days * 86400)).get(spot.id) ?? [];
     return json({ spot, hours, tideEvents, updatedAt: last?.t ?? null, source: last?.source ?? null, historyHours: history.hours });
