@@ -250,6 +250,7 @@ export function normalize(r: WeatherRow): WeatherRow {
 
 /**
  * mode = "refresh"：已經過去的小時不再更新，只覆蓋現在與未來的預報；沒有的小時就新增。
+ *   數值跟資料庫一樣就不寫（排程每 20 分鐘跑，但模型大約 6 小時才更新一次，整批重寫會吃光 D1 每天 10 萬列的免費寫入額度）。
  * mode = "fill"：只補沒有的小時（補抓過去資料用）。
  */
 async function writeRows(db: D1Database, spotId: number, rows: WeatherRow[], mode: "refresh" | "fill") {
@@ -261,7 +262,8 @@ async function writeRows(db: D1Database, spotId: number, rows: WeatherRow[], mod
     mode === "fill"
       ? "DO NOTHING"
       : `DO UPDATE SET ${["source", ...FIELDS, "updated_at"].map((c) => `${c}=excluded.${c}`).join(",")}
-         WHERE excluded.time >= ${currentHour}`;
+         WHERE excluded.time >= ${currentHour}
+           AND (${["source", ...FIELDS].map((c) => `${c} IS NOT excluded.${c}`).join(" OR ")})`;
   const sql = `INSERT INTO weather_hourly (${COLS.join(",")}) VALUES (${placeholders})
                ON CONFLICT(spot_id, time) ${conflict}`;
   const stmt = db.prepare(sql);
